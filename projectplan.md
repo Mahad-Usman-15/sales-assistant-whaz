@@ -86,7 +86,7 @@ Option B (Custom web app) is the only option that satisfies both the non-negotia
 
 **In scope:**
 - One form: client/business fields, service checkboxes sourced from `tools.md` (hardcoded list, not a database), a free-text notes/benefits field.
-- One fixed letterhead template, with the header/footer chrome exported as high-resolution image assets from the existing external design source (Figma/Canva/Illustrator).
+- One fixed letterhead template. ~~Header/footer chrome exported as high-resolution image assets from the existing external design source (Figma/Canva/Illustrator).~~ **Superseded 2026-07-19** — no such design source exists (the letterhead is AI-generated); the chrome is built in HTML/CSS/SVG instead. See the correction in §9.
 - Server-side PDF rendering via a headless browser (Playwright + a serverless-trimmed Chromium build) running as a Vercel serverless function.
 - Instant, stateless PDF download — no login, no database, no stored history in v1.
 
@@ -106,7 +106,7 @@ Sales rep → Form (Next.js page)
         API route (Vercel serverless function)
               │  server-renders an HTML string:
               │   - dynamic body content (client info, selected services, notes)
-              │   - laid over two pre-exported header/footer PNG backgrounds
+              │   - letterhead chrome built in HTML/CSS/SVG (see correction below)
               │   - styled with design.md tokens, self-hosted Montserrat/Inter fonts
               │   - waits on document.fonts.ready before printing
               ▼
@@ -116,7 +116,17 @@ Sales rep → Form (Next.js page)
         PDF streamed back to the browser → instant download
 ```
 
-No database, no auth, no persistent storage in v1 — every request is stateless. The key architectural decision: the letterhead's header/footer chrome (diagonal cuts, watermark, dot-grid) is treated as **flattened, pre-exported image assets**, not hand-built CSS shapes. Recreating that hand-designed graphic in CSS/SVG would be unnecessary fidelity risk; instead, whenever the brand chrome changes, a designer re-exports two PNGs from the source file and the app picks them up with no code change to the visual design itself.
+No database, no auth, no persistent storage in v1 — every request is stateless.
+
+> ### ⚠️ Correction (2026-07-19) — chrome is built in CSS, not shipped as images
+>
+> This section originally recorded the key architectural decision as treating the header/footer chrome as **flattened, pre-exported image assets**, on the premise that a designer could re-export two PNGs from an editable source file whenever the brand changed.
+>
+> **That premise was wrong.** The letterhead was produced by an AI image generator; there is no Figma/Canva/Illustrator source. The only available rasters (`docs/header.png`, `docs/footer.png`) are ~127 DPI with the contact email and taglines baked in as pixels, and nothing can re-export or genuinely upscale them.
+>
+> The chrome is therefore **rebuilt in HTML/CSS/SVG** — gradient bands, `clip-path` diagonal cuts, `radial-gradient` dot grid, Montserrat Black wordmark, inline SVG icons. This is resolution-independent and makes the contact details real selectable text, which is *better* fidelity than the raster route it replaces. The PNGs remain in `docs/` as visual reference only.
+>
+> Full reasoning and rejected alternatives: `specs/001-proposal-pdf-generator/research.md` R1. This also requires amending Constitution Principle II, whose rationale rests on the same false premise.
 
 ## 10. Risks & Mitigations
 
@@ -126,7 +136,7 @@ No database, no auth, no persistent storage in v1 — every request is stateless
 | PDF snapshotted before Montserrat/Inter fonts finish loading, silently falling back to a system font | Self-host font files, explicitly await `document.fonts.ready` before calling `page.pdf()` |
 | Serverless function bundle-size/memory limits on Vercel's free tier | Use a serverless-trimmed Chromium build (not a full Puppeteer bundle) |
 | Team drifts back to prompting ChatGPT out of habit | Make the tool visibly faster than prompting; short onboarding walkthrough at launch |
-| Someone updates the brand chrome in the source design file but forgets to re-export/update the PNGs in the app | Document the re-export step as the one manual maintenance task; treat it as part of any brand-refresh checklist |
+| ~~Someone updates the brand chrome in the source design file but forgets to re-export/update the PNGs~~ **No longer applicable** — there is no source design file, and the chrome lives in code | Superseded by a different risk: the CSS chrome can drift from the reference PNGs. Mitigation: an explicit visual-fidelity comparison against `docs/header.png` / `docs/footer.png` during implementation review (see `quickstart.md`) |
 
 ## 11. Success Metrics
 
@@ -146,6 +156,6 @@ No database, no auth, no persistent storage in v1 — every request is stateless
 
 ## Follow-ups & Risks
 
-- First task at MVP kickoff: open the external design source file and test-export the header/footer bands as clean, print-resolution (~300dpi) transparent PNGs before any app code is written — this plan assumes that export works cleanly.
+- ~~First task at MVP kickoff: open the external design source file and test-export the header/footer bands as clean, print-resolution (~300dpi) transparent PNGs before any app code is written.~~ **Resolved 2026-07-19 — the assumption failed.** There is no external design source file; the letterhead is AI-generated and the only PNGs are ~127 DPI. The chrome is built in CSS/SVG instead (see §9 correction), which removes this blocking prerequisite from the critical path entirely.
 - Confirmed: MVP hardcodes the service list from `tools.md`; migrating to a DB/CMS is an explicit v2 trigger once the team validates the MVP.
 - The PDF-rendering approach (headless Chromium + image-based chrome vs. Google Docs merge vs. a pure-JS PDF library) is an architecturally significant decision worth recording — see suggestion below.

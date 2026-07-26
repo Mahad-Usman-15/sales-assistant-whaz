@@ -1,2 +1,25 @@
 .mcp.json
 /.env*
+.claude/settings.local.json
+
+# Node / Next.js
+node_modules/
+.next/
+out/
+build/
+next-env.d.ts
+*.tsbuildinfo
+
+# Test output
+coverage/
+test-results/
+playwright-report/
+.playwright-mcp/
+
+# Scratch output from preview/verification scripts
+tmp/
+
+# Logs & OS cruft
+*.log
+.DS_Store
+Thumbs.db
