@@ -91,14 +91,14 @@ export function ProposalForm() {
 
   return (
     <form className="form" onSubmit={handleSubmit} noValidate>
-      <div className="grid">
-        <label className="field">
+      <div className="card grid">
+        <label className="field field--wide">
           <span className="field__label">Recipient name</span>
           <input value={values.recipientName} onChange={set('recipientName')} maxLength={120} />
           <FieldError message={errors.recipientName} />
         </label>
 
-        <label className="field field--wide">
+        <label className="field">
           <span className="field__label">Role line 1</span>
           <input
             value={values.recipientRoleLine1}
@@ -109,7 +109,7 @@ export function ProposalForm() {
           <FieldError message={errors.recipientRoleLine1} />
         </label>
 
-        <label className="field field--wide">
+        <label className="field">
           <span className="field__label">
             Role line 2 <span className="field__optional">(optional)</span>
           </span>
@@ -148,15 +148,17 @@ export function ProposalForm() {
 
       <FieldError message={errors._form} />
 
-      <button type="submit" className="submit" disabled={isGenerating}>
-        {isGenerating ? 'Generating proposal…' : 'Generate proposal PDF'}
-      </button>
+      <div className="form__actions">
+        <button type="submit" className="submit" disabled={isGenerating}>
+          {isGenerating ? 'Generating proposal…' : 'Generate proposal PDF'}
+        </button>
 
-      {isGenerating && (
-        <p className="pending" role="status">
-          Building your branded PDF. This can take a few seconds on the first run.
-        </p>
-      )}
+        {isGenerating && (
+          <p className="pending" role="status">
+            Building your branded PDF. This can take a few seconds on the first run.
+          </p>
+        )}
+      </div>
     </form>
   );
 }

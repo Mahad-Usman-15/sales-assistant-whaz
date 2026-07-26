@@ -1,11 +1,62 @@
 /* Browser UI styles only. The PDF document has its own self-contained styles (lib/chrome.ts). */
 
+/*
+ * Design tokens transcribed from WEB_DESIGN.md (frequency extraction, alpha).
+ * Variable names mirror that file's token names so the two can be diffed directly.
+ *
+ * Three deliberate deviations, each marked DEVIATION at its use site:
+ *   1. `low-confidence` (#0000ee) is unused — it is the UA default link colour picked up as an
+ *      extraction artifact, and at 2.3:1 on #000 it fails the doc's own "WCAG AA 4.5:1" guardrail.
+ *   2. Google Sans / Google Sans Text are proprietary and not licensable, so they lead the stack
+ *      for anyone who has them locally and fall back to the nearest available grotesque.
+ *   3. Elevation uses low-alpha `text` over `surface` rather than new hex values, because the
+ *      extraction reports no surface ramp and the doc forbids inventing one.
+ */
 :root {
-  --ink: #111111;
-  --ink-deep: #0a0436;
-  --muted: #666666;
-  --border: #d8d8de;
-  --bg: #f6f6f8;
+  color-scheme: dark;
+
+  /* colors — WEB_DESIGN.md `colors:` */
+  --surface: #000000;
+  --text: #ffffff;
+  --text-2: #818181;
+  --text-3: #9e9eff;
+  --text-4: #002549;
+  --local-accent: #f9fbfe;
+  --local-accent-2: #253145;
+  --local-accent-3: #ff4f4f;
+  --local-accent-4: #37e64e;
+
+  /* Elevation derived from the `text` token at low alpha (see deviation 3). */
+  --raise-1: rgba(255, 255, 255, 0.04);
+  --raise-2: rgba(255, 255, 255, 0.07);
+  --raise-3: rgba(255, 255, 255, 0.12);
+
+  /* typography — WEB_DESIGN.md `typography:` */
+  --font-text:
+    'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Helvetica Neue',
+    Arial, sans-serif;
+  --font-display:
+    'Google Sans', 'Google Sans Text', 'Roboto', -apple-system, BlinkMacSystemFont, 'Segoe UI',
+    'Helvetica Neue', Arial, sans-serif;
+
+  /* spacing — WEB_DESIGN.md `spacing:` */
+  --space-1: 1px;
+  --space-9: 6px;
+  --space-10: 8px;
+  --space-8: 12px;
+  --space-5: 16px;
+  --space-2: 24px;
+  --space-6: 32px;
+  --space-3: 37px;
+  --space-4: 44px;
+  --space-7: 160px;
+
+  /* rounded — WEB_DESIGN.md `rounded:` */
+  --radius-2: 19px;
+  --radius-1: 20px;
+  --radius-3: 24px;
+  --radius-5: 39px;
+  --radius-4: 40px;
 }
 
 * {
@@ -14,57 +65,81 @@
 
 body {
   margin: 0;
-  font-family:
-    'Inter',
-    -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
-  color: var(--ink);
-  background: var(--bg);
-  line-height: 1.5;
+  font-family: var(--font-text);
+  /* type-1 / type-3 */
+  font-size: 16px;
+  font-weight: 400;
+  line-height: 23.2px;
+  color: var(--text);
+  background-color: var(--surface);
+  /*
+   * Stands in for the reference's backdrop-filter depth (blur(60px) in the interaction evidence)
+   * without a blurred layer to filter. Both stops are validated tokens.
+   */
+  background-image: radial-gradient(
+    120% 70% at 50% -10%,
+    var(--local-accent-2) 0%,
+    rgba(37, 49, 69, 0) 60%
+  );
+  background-repeat: no-repeat;
+  background-attachment: fixed;
+  -webkit-font-smoothing: antialiased;
 }
 
 .page {
-  max-width: 880px;
+  max-width: 960px;
   margin: 0 auto;
-  padding: 40px 24px 80px;
+  padding: var(--space-3) var(--space-2) var(--space-7);
 }
 
+/* ---------- Header ---------- */
+
 .page__header {
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 20px;
-  margin-bottom: 28px;
+  padding: var(--space-6) 0 var(--space-3);
 }
 
 .page__title {
-  font-size: 26px;
-  font-weight: 800;
-  margin: 0 0 8px;
+  font-family: var(--font-display);
+  /* type-5: 48px / 500 / 52.8px / -1.92px. The em-based tracking holds the ratio when clamped. */
+  font-size: clamp(32px, 7.5vw, 48px);
+  font-weight: 500;
+  line-height: 1.1;
+  letter-spacing: -0.04em;
+  margin: 0 0 var(--space-5);
 }
 
 .page__subtitle {
   margin: 0;
-  color: var(--muted);
   max-width: 60ch;
+  color: var(--text-2);
 }
+
+/* ---------- Form shell ---------- */
 
 .form {
   display: flex;
   flex-direction: column;
-  gap: 24px;
+  gap: var(--space-2);
+}
+
+.card {
+  border: var(--space-1) solid var(--local-accent-2);
+  border-radius: var(--radius-3);
+  background: var(--raise-1);
+  padding: var(--space-2);
 }
 
 .grid {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
+  gap: var(--space-5);
 }
 
 .field {
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: var(--space-10);
+  min-width: 0;
 }
 
 .field--wide {
@@ -72,51 +147,86 @@ body {
 }
 
 .field__label {
-  font-size: 13px;
-  font-weight: 600;
+  /* type-2: 14px / 500 */
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  color: var(--text);
 }
 
 .field__optional {
   font-weight: 400;
-  color: var(--muted);
+  color: var(--text-2);
 }
 
 .field__hint {
-  font-size: 12px;
-  color: var(--muted);
+  font-size: 14px;
+  font-weight: 400;
+  line-height: 1.4;
+  color: var(--text-2);
 }
 
 input {
   font: inherit;
-  padding: 9px 11px;
-  border: 1px solid var(--border);
-  border-radius: 7px;
-  background: #ffffff;
-  color: inherit;
+  font-size: 16px; /* Below 16px iOS Safari zooms the viewport on focus. */
+  /*
+   * space-10 padding + space-2 leading + the 1px border sums to 42px, so min-height decides and
+   * the control lands on space-4 (44px) exactly. Inheriting the 23.2px body leading instead
+   * overshoots to 49.2px, which is not a value in the scale.
+   */
+  line-height: var(--space-2);
+  min-height: var(--space-4);
+  padding: var(--space-10) var(--space-5);
+  border: var(--space-1) solid var(--local-accent-2);
+  border-radius: var(--radius-1);
+  background: var(--raise-1);
+  color: var(--text);
   width: 100%;
+  transition:
+    border-color 120ms ease,
+    background-color 120ms ease;
 }
 
-input:focus {
-  outline: 2px solid var(--ink-deep);
-  outline-offset: 1px;
+input::placeholder {
+  color: var(--text-2);
 }
+
+input:hover {
+  background: var(--raise-2);
+}
+
+input:focus-visible {
+  /* Interaction evidence: outline-width 3px, outline-offset 0px, outline-color #9e9eff. */
+  outline: 3px solid var(--text-3);
+  outline-offset: 0;
+  border-color: transparent;
+}
+
+/* ---------- Sections ---------- */
 
 .section {
-  border: 1px solid var(--border);
-  border-radius: 10px;
-  padding: 18px;
-  background: #ffffff;
+  border: var(--space-1) solid var(--local-accent-2);
+  border-radius: var(--radius-3);
+  background: var(--raise-1);
+  padding: var(--space-2);
 }
 
 .section__title {
-  font-size: 15px;
-  margin: 0 0 14px;
+  font-family: var(--font-display);
+  /* type-4: 20px / 500 / 22px / -0.2px */
+  font-size: 20px;
+  font-weight: 500;
+  line-height: 22px;
+  letter-spacing: -0.01em;
+  margin: 0 0 var(--space-2);
 }
+
+/* ---------- Service picker ---------- */
 
 .service-picker {
   display: grid;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 22px;
+  gap: var(--space-2);
 }
 
 .service-group {
@@ -127,83 +237,218 @@ input:focus {
 }
 
 .service-group__legend {
-  font-size: 12px;
-  font-weight: 700;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
+  letter-spacing: 0.06em;
   text-transform: uppercase;
-  letter-spacing: 0.07em;
-  color: var(--ink-deep);
-  padding: 0 0 10px;
+  color: var(--text);
+  padding: 0 0 var(--space-8);
 }
 
 .service-group__count {
-  color: var(--muted);
+  color: var(--text-2);
   font-weight: 400;
+  letter-spacing: 0;
 }
 
 .service-group__items {
   display: flex;
   flex-direction: column;
-  gap: 10px;
+  gap: var(--space-10);
 }
 
 .service {
   display: grid;
   grid-template-columns: auto minmax(0, 1fr);
-  gap: 9px;
+  gap: var(--space-8);
   align-items: start;
   cursor: pointer;
-  font-size: 13px;
+  padding: var(--space-8);
+  border: var(--space-1) solid transparent;
+  border-radius: var(--radius-1);
+  transition:
+    background-color 120ms ease,
+    border-color 120ms ease;
+}
+
+.service:hover {
+  background: var(--raise-2);
+}
+
+.service:has(input:checked) {
+  background: rgba(158, 158, 255, 0.1);
+  border-color: var(--text-3);
+}
+
+.service:has(input:focus-visible) {
+  outline: 3px solid var(--text-3);
+  outline-offset: 0;
 }
 
 .service input {
-  width: auto;
-  margin-top: 3px;
+  width: var(--space-5);
+  height: var(--space-5);
+  min-height: 0;
+  margin: 2px 0 0;
+  padding: 0;
+  border: 0;
+  accent-color: var(--text-3);
+}
+
+/* The card itself carries the focus ring, so the native one would double up. */
+.service input:focus-visible {
+  outline: none;
 }
 
 .service__name {
   display: block;
-  font-weight: 600;
+  font-size: 14px;
+  font-weight: 500;
+  line-height: 1.4;
 }
 
 .service__description {
   display: block;
-  color: var(--muted);
-  font-size: 12px;
+  margin-top: 2px;
+  color: var(--text-2);
+  font-size: 14px;
+  font-weight: 400;
   line-height: 1.4;
 }
 
+/* ---------- Actions ---------- */
+
+.form__actions {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: var(--space-5);
+}
+
 .submit {
-  font: inherit;
-  font-weight: 600;
-  padding: 12px 20px;
+  font-family: var(--font-display);
+  font-size: 16px;
+  font-weight: 500;
+  letter-spacing: -0.01em;
+  /* Same arithmetic as `input`, so the CTA and the fields share one control height. */
+  line-height: var(--space-2);
+  min-height: var(--space-4);
+  padding: var(--space-10) var(--space-6);
   border: 0;
-  border-radius: 8px;
-  background: var(--ink-deep);
-  color: #ffffff;
+  /* radius-4 (40px) exceeds half the control height, so the pill is exact rather than clipped. */
+  border-radius: var(--radius-4);
+  background: var(--local-accent);
+  color: var(--surface);
   cursor: pointer;
-  align-self: flex-start;
+  transition: opacity 120ms ease;
+}
+
+.submit:hover:not(:disabled) {
+  opacity: 0.9;
+}
+
+.submit:focus-visible {
+  outline: 3px solid var(--text-3);
+  outline-offset: 2px;
 }
 
 .submit:disabled {
-  opacity: 0.65;
+  background: var(--raise-3);
+  color: var(--text-2);
   cursor: progress;
 }
 
 .pending {
+  display: flex;
+  align-items: center;
+  gap: var(--space-10);
   margin: 0;
-  color: var(--muted);
+  /* Matches the CTA's control height so the action row has one baseline. */
+  min-height: var(--space-4);
+  padding: var(--space-9) var(--space-5) var(--space-9) var(--space-8);
+  border-radius: var(--radius-4);
+  background: var(--text-4);
+  color: var(--text);
   font-size: 14px;
+  line-height: 1.4;
+}
+
+.pending::before {
+  content: '';
+  flex: none;
+  width: var(--space-10);
+  height: var(--space-10);
+  border-radius: 50%;
+  background: var(--local-accent-4);
+  animation: pulse 1.2s ease-in-out infinite;
+}
+
+@keyframes pulse {
+  50% {
+    opacity: 0.25;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .pending::before {
+    animation: none;
+  }
 }
 
 .field-error {
   margin: 0;
-  color: #b3261e;
-  font-size: 12.5px;
+  color: var(--local-accent-3);
+  font-size: 14px;
+  line-height: 1.4;
 }
 
-@media (max-width: 640px) {
+/* ---------- Breakpoints (WEB_DESIGN.md `Responsive Evidence`) ---------- */
+
+@media (max-width: 767.98px) {
   .grid,
   .service-picker {
     grid-template-columns: minmax(0, 1fr);
+  }
+
+  .page {
+    padding: var(--space-5) var(--space-5) var(--space-6);
+  }
+
+  .page__header {
+    padding: var(--space-2) 0 var(--space-2);
+  }
+
+  .submit,
+  .pending {
+    width: 100%;
+    justify-content: center;
+  }
+}
+
+@media (min-width: 1024px) {
+  .page {
+    padding: var(--space-4) var(--space-6) var(--space-7);
+  }
+
+  .card,
+  .section {
+    padding: var(--space-6);
+  }
+
+  .grid {
+    gap: var(--space-2);
+  }
+
+  .service-picker {
+    gap: var(--space-3);
+  }
+}
+
+@media (forced-colors: active) {
+  .card,
+  .section,
+  .service:has(input:checked) {
+    border-color: CanvasText;
   }
 }

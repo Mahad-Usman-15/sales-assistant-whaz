@@ -105,6 +105,8 @@ Brand reference material (do not regenerate or approximate — treat as ground t
 ## Directory Structure
 
 - `projectplan.md`, `whaz.md`, `design.md`, `tools.md`, `problemstatement`, `hld.txt` — business/design/architecture reference docs at repo root
+- `README.md` — **non-technical product overview** (audience: sales team and stakeholders); `docs/DEVELOPMENT.md` holds the engineering content that used to live there (setup, scripts, architecture, blank-page troubleshooting, chrome-repetition and fidelity gotchas, determinism, deploy). Keep dev notes out of the README.
+- `WEB_DESIGN.md` — extracted design tokens for the **browser form UI only**, transcribed into `app/globals.css`'s `:root`. Unrelated to the PDF, which is measured from `docs/reference-letter-head.pdf`.
 - `assets/brand/letterhead.png` — the **shipped** letterhead: the full-page 1054×1492 composite extracted losslessly from `docs/reference-letter-head.pdf`. Inlined as a data URI by `lib/brand.ts`. This is the only brand raster that is bundled.
 - `assets/fonts/` — `Arimo-Regular/Bold.woff2` only (the shipped body font, metric-compatible with the reference's Helvetica). Static per-weight files, never variable fonts.
 - `scripts/` — `preview-chrome.mjs` (screenshots the preview docs), `check-table-fit.mjs` (`npm run check:table-fit`; fails if catalog copy would wrap a table cell)
