@@ -1,10 +1,9 @@
 import { test, expect, type Page } from '@playwright/test';
 
 async function fillRequired(page: Page) {
-  await page.getByLabel('Recipient name').fill('Ayesha Khan');
-  await page.getByLabel('Client company').fill('Northwind Consulting');
-  await page.getByLabel('Proposal title').fill('Growth Partnership Proposal');
-  await page.getByLabel('Prepared by').fill('Mahad Usman');
+  await page.getByLabel('Recipient name').fill('Randy Newcomb');
+  await page.getByLabel('Role line 1').fill('Senior Advisor, The Omidyar Group');
+  await page.getByLabel('Client company').fill('Humanity United');
 }
 
 test('US1: filling the form downloads a branded PDF', async ({ page }) => {
@@ -12,7 +11,7 @@ test('US1: filling the form downloads a branded PDF', async ({ page }) => {
   await fillRequired(page);
 
   await page.getByRole('checkbox', { name: /Clarity Map/ }).check();
-  await page.getByLabel(/Additional notes/).fill('Looking forward to working together.');
+  await page.getByLabel(/Role line 2/).fill('Founding President & CEO, Humanity United');
 
   const downloadPromise = page.waitForEvent('download');
   await page.getByRole('button', { name: /Generate proposal/ }).click();
@@ -22,7 +21,7 @@ test('US1: filling the form downloads a branded PDF', async ({ page }) => {
 
   const download = await downloadPromise;
   expect(download.suggestedFilename()).toMatch(
-    /^proposal-northwind-consulting-\d{4}-\d{2}-\d{2}\.pdf$/
+    /^proposal-humanity-united-\d{4}-\d{2}-\d{2}\.pdf$/
   );
 
   const stream = await download.createReadStream();

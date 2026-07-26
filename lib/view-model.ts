@@ -1,4 +1,3 @@
-import { escapeHtmlWithBreaks } from './escape';
 import type { ProposalInput } from './schema';
 import { SERVICE_CATALOG, type ServiceCatalogItem } from './catalog';
 
@@ -9,40 +8,10 @@ import { SERVICE_CATALOG, type ServiceCatalogItem } from './catalog';
  */
 export interface ProposalViewModel {
   recipientName: string;
-  clientCompany: string;
-  proposalTitle: string;
-  preparedBy: string;
-  formattedDate: string;
+  /** Zero, one, or two bold role lines beneath the recipient's name. */
+  recipientRoles: string[];
   services: ServiceCatalogItem[];
-  notesHtml: string;
   hasServices: boolean;
-  hasNotes: boolean;
-}
-
-const MONTHS = [
-  'January',
-  'February',
-  'March',
-  'April',
-  'May',
-  'June',
-  'July',
-  'August',
-  'September',
-  'October',
-  'November',
-  'December',
-];
-
-/**
- * Formats YYYY-MM-DD as "19 July 2026".
- *
- * Hand-rolled rather than using toLocaleDateString: the output must not vary with the server's
- * locale or timezone, or identical input would produce differing PDFs (FR-007).
- */
-function formatDate(isoDate: string): string {
-  const [year, month, day] = isoDate.split('-').map(Number);
-  return `${day} ${MONTHS[month - 1]} ${year}`;
 }
 
 export function toViewModel(input: ProposalInput): ProposalViewModel {
@@ -51,17 +20,14 @@ export function toViewModel(input: ProposalInput): ProposalViewModel {
   // catalog order, never the order the rep happened to click them (FR-007).
   const services = SERVICE_CATALOG.filter((service) => selected.has(service.id));
 
-  const notes = input.notes.trim();
+  const recipientRoles = [input.recipientRoleLine1, input.recipientRoleLine2]
+    .map((line) => line.trim())
+    .filter((line) => line.length > 0);
 
   return {
     recipientName: input.recipientName,
-    clientCompany: input.clientCompany,
-    proposalTitle: input.proposalTitle,
-    preparedBy: input.preparedBy,
-    formattedDate: formatDate(input.proposalDate),
+    recipientRoles,
     services,
-    notesHtml: notes ? escapeHtmlWithBreaks(notes) : '',
     hasServices: services.length > 0,
-    hasNotes: notes.length > 0,
   };
 }

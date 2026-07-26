@@ -15,7 +15,9 @@ How to get the feature running locally and verify it end-to-end. Nothing here is
 | Self-hosted fonts | See below — the only binary assets |
 | No env vars | The MVP needs **zero** secrets; there is no `.env` to set up |
 
-**No brand image assets are required.** The letterhead chrome is built in HTML/CSS/SVG (research R1) because the letterhead was AI-generated and has no vector source to export from. `docs/header.png` and `docs/footer.png` stay in the repo purely as the **visual reference to match against** — they are never bundled or shipped.
+**One brand image asset is required and it is already committed**: `assets/brand/letterhead.png`, the full-page 1054x1492 composite (header band, body watermark, footer band) extracted losslessly from `docs/reference-letter-head.pdf`. It is inlined as a data URI at render time, so nothing is fetched over the network.
+
+`docs/header.png` and `docs/footer.png` remain **visual reference only** and are never bundled. Do not attempt to re-export or upscale them: the letterhead is AI-generated, has no vector source, and generative upscaling was tried and empirically fails (see spec Clarifications 2026-07-26).
 
 ### Fonts
 
@@ -23,11 +25,12 @@ Place self-hosted `.woff2` faces in `assets/fonts/`:
 
 | File | Used for |
 |---|---|
-| `Montserrat-Black.woff2` | The WHAZ wordmark — weight 900, per `design.md` §5 |
-| `Inter-Regular.woff2` | Body text, captions |
-| `Inter-SemiBold.woff2` | Headings, section labels |
+| `Arimo-Regular.woff2` | Body text |
+| `Arimo-Bold.woff2` | Headings, table headers, the bold recipient role lines |
 
-Do not reference Google Fonts — forbidden by the constitution. **Montserrat Black is load-bearing**: the wordmark is now type rather than artwork, so if that face fails to load the logo itself renders wrong, not merely the body copy.
+Arimo is metric-compatible with the reference's Helvetica. It is self-hosted because `@sparticuz/chromium` ships no system fonts, so Helvetica cannot simply be named. It comes from `@fontsource/arimo`, **not** Google Fonts, which serves Arimo variable-only — and variable fonts must never be used here (Chromium converts them to Type3 and breaks text selection).
+
+These two files are the entire contents of `assets/fonts/`; the Montserrat and Inter faces from the CSS-chrome era were removed once constitution v3.0.0 landed.
 
 ---
 
@@ -46,31 +49,58 @@ npm run dev                       # http://localhost:3000
 ## Verify it works
 
 1. Open `http://localhost:3000`.
-2. Fill recipient, client company, proposal title, prepared-by; leave the date as today.
+2. Fill recipient name, role line 1, and client company; leave the date as today. Optionally add role line 2.
 3. Tick a few services from both the free and paid lists.
-4. Add multi-line notes.
-5. Click **Generate**. A spinner shows while rendering; a PDF download starts within a few seconds.
+4. Click **Generate**. A spinner shows while rendering; a PDF download starts within a few seconds.
 
 Open the PDF and confirm:
 
-- [ ] Header band at top, footer band at bottom, both full-bleed with clean diagonal cuts
+- [ ] Header band at top, footer band at bottom, watermark behind the body — all full-bleed
 - [ ] Body text clears the diagonal cuts — nothing tucked under the chrome
-- [ ] Letter reads: salutation → intro → services → notes → closing → signature block (FR-014)
-- [ ] Only the ticked services appear, names/descriptions matching `tools.md` exactly
+- [ ] Document reads: **Executive Proposal** -> Prepared for -> intro -> table -> Why Whaz -> Next Step (FR-014)
+- [ ] Only the ticked services appear, in catalog order, one row each
+- [ ] Every table cell is a single line — a wrapped cell means catalog copy outgrew its column
 - [ ] **No prices anywhere** (FR-015)
-- [ ] Fonts render as Montserrat/Inter, not a fallback serif — a serif means the font race lost
-- [ ] Chrome text stays razor-sharp at 400% zoom, and `whazpk@gmail.com` is **selectable text** (proves the CSS chrome works; if it's fuzzy or unselectable, something is still rendering an image)
+- [ ] Body text renders as Arimo, not a fallback serif — a serif means the font race lost
+- [ ] Body text is selectable and searchable (the letterhead artwork is raster; the text must not be)
 
-### Visual fidelity check (research R1) — do not skip
+### Layout fidelity check (FR-005a) — do not skip
 
-Because the chrome is now rebuilt in CSS rather than shipped as artwork, matching the reference is a review obligation. Open the generated PDF beside `docs/header.png`, `docs/footer.png`, and `docs/reference-letter-head.pdf` and compare:
+The reference is the acceptance criterion, and this check is **numeric, not visual** — eyeballing missed a 5mm error during implementation.
 
-- [ ] Gradient direction and endpoints (`#111111` → `#0a0436`)
-- [ ] Diagonal cut — correct corner, and the angle matches
-- [ ] Divider rule positions between wordmark / label / contact zones
-- [ ] Social + envelope icon shapes and their rounded chips
-- [ ] Dot-grid density and placement (footer, right side)
-- [ ] Montserrat Black letterforms against the reference wordmark, including the star accent on the `Z`
+```bash
+npx vitest run tests/unit/_dump-preview.test.ts   # writes tmp/preview.html and tmp/preview-all.html
+```
+
+Render `tmp/preview.html` to PDF, then compare the baseline of each fixed element against
+`docs/reference-letter-head.pdf` (extract with any PDF text-position tool):
+
+| Element | Reference baseline |
+|---|---|
+| `Executive Proposal` | 77.89mm |
+| `Prepared for:` | 84.24mm |
+| Role line 1 / 2 | 88.48mm / 92.71mm |
+| Intro lines | 103.63 / 107.87 / 112.10mm |
+| Table header | 122.47mm |
+| Table row pitch | 6.35mm, uniform |
+
+- [ ] Every fixed element within 0.5mm of the reference (current build: <=0.11mm)
+- [ ] Table row pitch is exactly 6.35mm with no row wrapping to two lines
+
+Then check the catalog copy still fits its columns:
+
+```bash
+npm run check:table-fit
+```
+
+### Multi-page check (FR-012)
+
+Select **all 17 services** — the longest document the form can produce (`tmp/preview-all.html`).
+
+- [ ] The PDF runs to 2 pages
+- [ ] The letterhead (header band, watermark, footer band) is present on **both** pages
+- [ ] Page 2 content starts below the header band, and page 1 content clears the footer band
+- [ ] Nothing is truncated
 
 ### Determinism check (FR-007)
 
@@ -82,11 +112,7 @@ cmp a.pdf b.pdf && echo "deterministic ✅"
 
 ### Injection check (FR-008)
 
-Put `<script>alert(1)</script>` and `<h1>BIG</h1>` in the notes field. Both must appear in the PDF as **literal visible text**. Any rendering effect is a defect.
-
-### Multi-page check (FR-012)
-
-Paste several thousand characters into notes. The PDF must run to multiple pages with the header and footer on **every** page and no truncation.
+Put `<script>alert(1)</script>` and `<h1>BIG</h1>` in the recipient name and role fields. Both must appear in the PDF as **literal visible text**. Any rendering effect is a defect.
 
 ---
 

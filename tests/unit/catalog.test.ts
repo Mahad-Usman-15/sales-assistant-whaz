@@ -90,7 +90,21 @@ describe('SERVICE_CATALOG invariants', () => {
 
   it('carries no pricing field (FR-015)', () => {
     for (const service of SERVICE_CATALOG) {
-      expect(Object.keys(service).sort()).toEqual(['description', 'id', 'name', 'tier']);
+      expect(Object.keys(service).sort()).toEqual([
+        'benefit',
+        'challenge',
+        'description',
+        'id',
+        'name',
+        'tier',
+      ]);
+    }
+  });
+
+  it('gives every service a non-empty challenge and benefit for the proposal table', () => {
+    for (const service of SERVICE_CATALOG) {
+      expect(service.challenge.trim().length).toBeGreaterThan(0);
+      expect(service.benefit.trim().length).toBeGreaterThan(0);
     }
   });
 

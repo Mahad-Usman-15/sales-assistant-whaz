@@ -11,7 +11,8 @@
     "lint": "eslint .",
     "test:unit": "vitest run",
     "test:integration": "playwright test",
-    "test": "npm run test:unit && npm run test:integration"
+    "test": "npm run test:unit && npm run test:integration",
+    "check:table-fit": "node scripts/check-table-fit.mjs"
   },
   "dependencies": {
     "@sparticuz/chromium": "^149.0.0",

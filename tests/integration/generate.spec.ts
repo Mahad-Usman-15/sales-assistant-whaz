@@ -1,4 +1,7 @@
 import { test, expect, type APIRequestContext } from '@playwright/test';
+import { SERVICE_CATALOG } from '../../lib/catalog';
+
+const CATALOG_IDS = SERVICE_CATALOG.map((service) => service.id);
 
 /**
  * Contract tests for POST /api/generate.
@@ -6,13 +9,12 @@ import { test, expect, type APIRequestContext } from '@playwright/test';
  */
 
 const validPayload = {
-  recipientName: 'Ayesha Khan',
-  clientCompany: 'Northwind Consulting',
-  proposalTitle: 'Growth Partnership Proposal',
-  preparedBy: 'Mahad Usman',
+  recipientName: 'Randy Newcomb',
+  recipientRoleLine1: 'Senior Advisor, The Omidyar Group',
+  recipientRoleLine2: 'Founding President & CEO, Humanity United',
+  clientCompany: 'Humanity United',
   proposalDate: '2026-07-19',
   selectedServiceIds: ['clarity-map', 'growth-engine'],
-  notes: 'Following our call on Tuesday.\n\nWe can start next month.',
 };
 
 async function generate(request: APIRequestContext, payload: unknown) {
@@ -35,11 +37,11 @@ test('case 9: GET is rejected with 405', async ({ request }) => {
   expect(response.status()).toBe(405);
 });
 
-test('case 2: no services and no notes still generates', async ({ request }) => {
+test('case 2: no services and no second role line still generates', async ({ request }) => {
   const response = await generate(request, {
     ...validPayload,
     selectedServiceIds: [],
-    notes: '',
+    recipientRoleLine2: '',
   });
 
   expect(response.status()).toBe(200);
@@ -85,7 +87,8 @@ test('case 5: unknown service id is rejected, not silently dropped', async ({ re
 test('case 6: injected markup stays literal text in the PDF (FR-008)', async ({ request }) => {
   const response = await generate(request, {
     ...validPayload,
-    notes: '<script>alert(1)</script> and <h1>BIG</h1>',
+    recipientName: '<script>alert(1)</script>',
+    recipientRoleLine1: 'and <h1>BIG</h1>',
   });
 
   expect(response.status()).toBe(200);
@@ -109,13 +112,15 @@ test('case 7: identical payloads produce identical PDFs (FR-007, SC-005)', async
   expect(a.equals(b)).toBe(true);
 });
 
-test('case 8: long notes paginate with chrome on every page (FR-012)', async ({ request }) => {
-  const longNotes = Array.from(
-    { length: 60 },
-    (_, i) => `Paragraph ${i + 1}: this proposal covers the agreed scope of work in detail.`
-  ).join('\n\n');
-
-  const response = await generate(request, { ...validPayload, notes: longNotes });
+test('case 8: a full service table paginates with chrome on every page (FR-012)', async ({
+  request,
+}) => {
+  // The whole catalog is the longest document the form can produce; its table alone exceeds the
+  // content height left between the header and footer bands.
+  const response = await generate(request, {
+    ...validPayload,
+    selectedServiceIds: CATALOG_IDS,
+  });
   expect(response.status()).toBe(200);
 
   const pdf = await response.body();
@@ -124,6 +129,6 @@ test('case 8: long notes paginate with chrome on every page (FR-012)', async ({ 
   const pageCount = (raw.match(/\/Type\s*\/Page[^s]/g) ?? []).length;
   expect(pageCount).toBeGreaterThan(1);
 
-  // The last paragraph must survive — no silent truncation.
+  // The final section must survive — no silent truncation.
   expect(pdf.byteLength).toBeGreaterThan(50_000);
 });

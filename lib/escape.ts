@@ -17,14 +17,3 @@ const HTML_ENTITIES: Record<string, string> = {
 export function escapeHtml(value: string): string {
   return value.replace(/[&<>"']/g, (char) => HTML_ENTITIES[char]);
 }
-
-/**
- * Escapes, then converts newlines to `<br>`.
- *
- * The order is load-bearing and is why this exists as its own function rather than being left to
- * callers: escaping first means a literal `<br>` typed by a rep stays literal text, while doing it
- * the other way round would let injected markup survive next to a generated break.
- */
-export function escapeHtmlWithBreaks(value: string): string {
-  return escapeHtml(value).replace(/\r\n|\r|\n/g, '<br>');
-}

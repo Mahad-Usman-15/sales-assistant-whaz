@@ -37,15 +37,17 @@ Form (client component)
    └─ POST /api/generate  (Node runtime — never Edge; Chromium needs full Node)
         ├─ zod validation           lib/schema.ts     — shared with the client
         ├─ HTML escaping            lib/escape.ts     — the single injection boundary
-        ├─ view model               lib/view-model.ts — resolves services, formats the date
-        ├─ HTML assembly            lib/template.ts   — letter body
-        │    └─ letterhead chrome   lib/chrome.ts     — CSS/SVG bands
+        ├─ view model               lib/view-model.ts — resolves services, roles
+        ├─ HTML assembly            lib/template.ts   — document body
+        │    ├─ fixed copy          lib/copy.ts       — boilerplate prose
+        │    ├─ letterhead          lib/brand.ts      — approved raster, inlined
+        │    ├─ layout + type       lib/chrome.ts     — measured from the reference
         │    └─ fonts               lib/fonts.ts      — .woff2 inlined as base64
         └─ headless Chromium        lib/pdf.ts        — page.pdf() → PDF bytes
 ```
 
-The render step makes **zero network requests** — fonts are inlined and the chrome is CSS, so
-nothing is fetched while a proposal is being built.
+The render step makes **zero network requests** — the fonts and the letterhead are both inlined as
+data URIs, so nothing is fetched while a proposal is being built.
 
 ## Troubleshooting
 
@@ -83,25 +85,29 @@ to this directory to prevent that — don't remove it.
 
 ## Two things that will bite you if you don't know them
 
-### 1. The letterhead is code, not an image
+### 1. `docs/reference-letter-head.pdf` is the approved *document*, not a letterhead swatch
 
-`docs/header.png` and `docs/footer.png` are **visual reference only — never bundle them.** The
-letterhead was produced by an AI image generator, so there is no vector source to re-export
-from, and the PNGs are ~127 DPI with the contact email baked in as pixels.
+Its text layer decodes to the whole proposal — title, recipient block, intro, the three-column
+table, "Why Whaz", "Next Step". Every number in `lib/geometry.ts` and every margin in
+`lib/chrome.ts` is measured from it. It is the acceptance criterion, not a mood board.
 
-The chrome is therefore rebuilt in HTML/CSS/SVG in `lib/chrome.ts` (gradient bands, `clip-path`
-diagonal cuts, `radial-gradient` dot grid, WHAZ wordmark in Montserrat Black, inline SVG icons).
-That is resolution-independent and keeps the contact details as real selectable text.
+The letterhead artwork ships as `assets/brand/letterhead.png` — the full-page composite (both bands
+*and* the body watermark) extracted losslessly from that PDF and painted full-bleed. **Never
+reconstruct it in CSS, and never try to upscale it.** The letterhead is AI-generated with no vector
+source; a generative upscale was attempted and produced a different image, not a sharper one (wrong
+canvas size, corrupted tagline glyphs, shifted band colour, destroyed alpha). Its ~127 DPI is what
+the client approved, so that is the bar. `docs/header.png` / `docs/footer.png` remain **reference
+only — never bundle them.**
 
-**Because the chrome is code, fidelity is a review obligation.** Before merging any change to
-`lib/chrome.ts`, compare the rendered output side by side against `docs/header.png`,
-`docs/footer.png`, and `docs/reference-letter-head.pdf` — gradient endpoints, diagonal-cut angle
-and corner, divider positions, icon shapes, dot-grid density, wordmark letterforms. This is
-required by constitution v2.0.0 Principle II, not a nicety. To render a preview:
+**Fidelity is verified numerically, not visually** — constitution v3.0.0 Principle II sets a 0.5mm
+tolerance, and a visual review of this feature once passed a 5.1mm error. Before merging any layout
+change, render a proposal and compare text baselines against the reference (full table in
+`specs/001-proposal-pdf-generator/quickstart.md`; current build agrees to ≤0.11mm):
 
 ```bash
-npx vitest run tests/unit/_dump-preview.test.ts     # writes tmp/preview.html
-node scripts/preview-chrome.mjs tmp/preview.html    # writes tmp/preview/page.png
+npx vitest run tests/unit/_dump-preview.test.ts   # writes tmp/preview.html + tmp/preview-all.html
+node scripts/preview-chrome.mjs tmp/preview.html  # writes tmp/preview/page.png
+npm run check:table-fit                           # fails if catalog copy would wrap a table cell
 ```
 
 ### 2. Chrome repetition needs *two* mechanisms
@@ -160,7 +166,7 @@ If the function fails to deploy or times out, check in this order:
 
 | Document | What it holds |
 |---|---|
-| `.specify/memory/constitution.md` | Binding principles (v2.0.0) |
+| `.specify/memory/constitution.md` | Binding principles (v3.0.0) |
 | `specs/001-proposal-pdf-generator/` | Spec, plan, research, data model, API contract, tasks |
 | `design.md` | Brand tokens and the §5 letterhead spec |
 | `tools.md` | Service catalog (source of truth) |

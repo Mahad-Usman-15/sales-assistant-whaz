@@ -11,18 +11,19 @@ function today(): string {
   return `${now.getFullYear()}-${pad(now.getMonth() + 1)}-${pad(now.getDate())}`;
 }
 
+// The document's prose and structure are fixed (lib/copy.ts); only the recipient block and
+// the service selection vary, so these are the only fields the rep fills in.
 const EMPTY = {
   recipientName: '',
+  recipientRoleLine1: '',
+  recipientRoleLine2: '',
   clientCompany: '',
-  proposalTitle: '',
-  preparedBy: '',
 };
 
 export function ProposalForm() {
   const [values, setValues] = useState(EMPTY);
   const [proposalDate, setProposalDate] = useState(today);
   const [selectedServiceIds, setSelectedServiceIds] = useState<string[]>([]);
-  const [notes, setNotes] = useState('');
   const [errors, setErrors] = useState<FieldErrors>({});
   const [isGenerating, setIsGenerating] = useState(false);
 
@@ -38,7 +39,7 @@ export function ProposalForm() {
     event.preventDefault();
     if (isGenerating) return;
 
-    const payload = { ...values, proposalDate, selectedServiceIds, notes };
+    const payload = { ...values, proposalDate, selectedServiceIds };
 
     // Validate with the same schema the server uses, so messages never drift apart.
     // The server re-validates regardless — this is UX, not a trust boundary.
@@ -97,22 +98,35 @@ export function ProposalForm() {
           <FieldError message={errors.recipientName} />
         </label>
 
+        <label className="field field--wide">
+          <span className="field__label">Role line 1</span>
+          <input
+            value={values.recipientRoleLine1}
+            onChange={set('recipientRoleLine1')}
+            maxLength={160}
+            placeholder="Senior Advisor, The Omidyar Group"
+          />
+          <FieldError message={errors.recipientRoleLine1} />
+        </label>
+
+        <label className="field field--wide">
+          <span className="field__label">
+            Role line 2 <span className="field__optional">(optional)</span>
+          </span>
+          <input
+            value={values.recipientRoleLine2}
+            onChange={set('recipientRoleLine2')}
+            maxLength={160}
+            placeholder="Founding President &amp; CEO, Humanity United"
+          />
+          <FieldError message={errors.recipientRoleLine2} />
+        </label>
+
         <label className="field">
           <span className="field__label">Client company</span>
           <input value={values.clientCompany} onChange={set('clientCompany')} maxLength={160} />
           <FieldError message={errors.clientCompany} />
-        </label>
-
-        <label className="field field--wide">
-          <span className="field__label">Proposal title</span>
-          <input value={values.proposalTitle} onChange={set('proposalTitle')} maxLength={200} />
-          <FieldError message={errors.proposalTitle} />
-        </label>
-
-        <label className="field">
-          <span className="field__label">Prepared by</span>
-          <input value={values.preparedBy} onChange={set('preparedBy')} maxLength={120} />
-          <FieldError message={errors.preparedBy} />
+          <span className="field__hint">Used for the download filename only.</span>
         </label>
 
         <label className="field">
@@ -131,19 +145,6 @@ export function ProposalForm() {
         <ServicePicker selected={selectedServiceIds} onToggle={toggleService} />
         <FieldError message={errors.selectedServiceIds} />
       </section>
-
-      <label className="field">
-        <span className="field__label">
-          Additional notes <span className="field__optional">(optional)</span>
-        </span>
-        <textarea
-          value={notes}
-          onChange={(e) => setNotes(e.target.value)}
-          rows={6}
-          maxLength={5000}
-        />
-        <FieldError message={errors.notes} />
-      </label>
 
       <FieldError message={errors._form} />
 

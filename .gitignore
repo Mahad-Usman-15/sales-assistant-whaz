@@ -14,6 +14,7 @@ next-env.d.ts
 coverage/
 test-results/
 playwright-report/
+.playwright-mcp/
 
 # Scratch output from preview/verification scripts
 tmp/

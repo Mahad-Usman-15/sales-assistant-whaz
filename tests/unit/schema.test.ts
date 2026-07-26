@@ -2,13 +2,12 @@ import { describe, it, expect } from 'vitest';
 import { proposalInputSchema, collectFieldErrors } from '../../lib/schema';
 
 const valid = {
-  recipientName: 'Ayesha Khan',
-  clientCompany: 'Northwind Consulting',
-  proposalTitle: 'Growth Partnership Proposal',
-  preparedBy: 'Mahad Usman',
+  recipientName: 'Randy Newcomb',
+  recipientRoleLine1: 'Senior Advisor, The Omidyar Group',
+  recipientRoleLine2: 'Founding President & CEO, Humanity United',
+  clientCompany: 'Humanity United',
   proposalDate: '2026-07-20',
   selectedServiceIds: ['clarity-map'],
-  notes: 'Some notes',
 };
 
 const parse = (overrides: Record<string, unknown> = {}) =>
@@ -20,24 +19,24 @@ describe('proposalInputSchema — happy path', () => {
   });
 
   it('defaults optional fields when omitted', () => {
-    const { selectedServiceIds: _s, notes: _n, ...minimal } = valid;
+    const { selectedServiceIds: _s, recipientRoleLine2: _r, ...minimal } = valid;
     const result = proposalInputSchema.safeParse(minimal);
     expect(result.success).toBe(true);
     if (result.success) {
       expect(result.data.selectedServiceIds).toEqual([]);
-      expect(result.data.notes).toBe('');
+      expect(result.data.recipientRoleLine2).toBe('');
     }
   });
 
   it('trims surrounding whitespace from text fields', () => {
-    const result = parse({ recipientName: '  Ayesha Khan  ' });
+    const result = parse({ recipientName: '  Randy Newcomb  ' });
     expect(result.success).toBe(true);
-    if (result.success) expect(result.data.recipientName).toBe('Ayesha Khan');
+    if (result.success) expect(result.data.recipientName).toBe('Randy Newcomb');
   });
 });
 
 describe('proposalInputSchema — required fields (FR-009)', () => {
-  const required = ['recipientName', 'clientCompany', 'proposalTitle', 'preparedBy'] as const;
+  const required = ['recipientName', 'recipientRoleLine1', 'clientCompany'] as const;
 
   it.each(required)('rejects an empty %s', (field) => {
     const result = parse({ [field]: '' });
@@ -47,6 +46,12 @@ describe('proposalInputSchema — required fields (FR-009)', () => {
 
   it.each(required)('rejects a whitespace-only %s', (field) => {
     expect(parse({ [field]: '    ' }).success).toBe(false);
+  });
+
+  it('accepts a whitespace-only second role line, which is optional', () => {
+    const result = parse({ recipientRoleLine2: '   ' });
+    expect(result.success).toBe(true);
+    if (result.success) expect(result.data.recipientRoleLine2).toBe('');
   });
 
   it('reports every failing field at once, not just the first', () => {
@@ -65,25 +70,20 @@ describe('proposalInputSchema — required fields (FR-009)', () => {
 describe('proposalInputSchema — length boundaries', () => {
   it.each([
     ['recipientName', 120],
+    ['recipientRoleLine1', 160],
+    ['recipientRoleLine2', 160],
     ['clientCompany', 160],
-    ['proposalTitle', 200],
-    ['preparedBy', 120],
   ] as const)('accepts %s at exactly %i characters', (field, max) => {
     expect(parse({ [field]: 'a'.repeat(max) }).success).toBe(true);
   });
 
   it.each([
     ['recipientName', 121],
+    ['recipientRoleLine1', 161],
+    ['recipientRoleLine2', 161],
     ['clientCompany', 161],
-    ['proposalTitle', 201],
-    ['preparedBy', 121],
   ] as const)('rejects %s at %i characters', (field, over) => {
     expect(parse({ [field]: 'a'.repeat(over) }).success).toBe(false);
-  });
-
-  it('accepts notes at exactly 5000 characters and rejects 5001', () => {
-    expect(parse({ notes: 'a'.repeat(5000) }).success).toBe(true);
-    expect(parse({ notes: 'a'.repeat(5001) }).success).toBe(false);
   });
 });
 

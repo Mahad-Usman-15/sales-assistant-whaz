@@ -9,7 +9,7 @@ description: "Task list for Proposal Letterhead PDF Generator (MVP)"
 
 **Tests**: INCLUDED. `plan.md` specifies Vitest (unit) + `@playwright/test` (integration), and `contracts/generate-api.md` defines 9 named contract cases. Test tasks below map to those cases.
 
-**Constitution**: v2.0.0. Two obligations bind this task list directly — the letterhead chrome MUST be built in HTML/CSS/SVG with reference rasters never bundled (Principle II), and its visual fidelity MUST be verified by explicit side-by-side comparison before merge (T034, a required review step, not a nicety).
+**Constitution**: v3.0.0 (was v2.0.0 when these tasks were written). ⚠️ Principle II was amended on 2026-07-26 and **inverted the first obligation below**: the letterhead is now the approved raster (`assets/brand/letterhead.png`) embedded full-bleed, *not* CSS/SVG-built chrome, and exactly that one raster is bundled. The second obligation survives but is **strengthened**: fidelity MUST be verified numerically against `docs/reference-letter-head.pdf` (≤0.5mm baseline tolerance), not by side-by-side visual comparison. Tasks below marked with a superseded note were completed under v2.0.0 and their outputs have since been replaced.
 
 **Organization**: Tasks are grouped by user story so each can be implemented, tested, and demoed independently.
 
@@ -37,7 +37,7 @@ Single Next.js App Router project at repository root (per `plan.md` Structure De
 - [X] T006 [P] Configure Playwright in `playwright.config.ts` (integration tests under `tests/integration/`, dev server auto-start)
 - [X] T007 [P] Add npm scripts to `package.json`: `dev`, `build`, `start`, `lint`, `test:unit`, `test:integration`, `test`
 - [X] T008 [P] Extend `.gitignore` with `node_modules/`, `.next/`, `test-results/`, `playwright-report/`
-- [X] T009 [P] Download and commit self-hosted fonts to `assets/fonts/`: `Montserrat-Black.woff2` (weight 900 — load-bearing for the wordmark), `Inter-Regular.woff2`, `Inter-SemiBold.woff2` (both OFL-licensed; do **not** reference Google Fonts CDN)
+- [X] T009 [P] Download and commit self-hosted fonts to `assets/fonts/` (do **not** reference Google Fonts CDN) — *superseded by constitution v3.0.0*: the shipped faces are now `Arimo-Regular.woff2` / `Arimo-Bold.woff2`, static per-weight files metric-compatible with the reference's Helvetica. Montserrat/Inter remain in the tree from the CSS-chrome era but are no longer referenced.
 
 ---
 
@@ -77,8 +77,8 @@ Single Next.js App Router project at repository root (per `plan.md` Structure De
 ### Implementation for User Story 1
 
 - [X] T021 [P] [US1] Define the base Zod schema in `lib/schema.ts` — `recipientName` (1–120), `clientCompany` (1–160), `proposalTitle` (1–200), `preparedBy` (1–120), `proposalDate` (`YYYY-MM-DD`), `notes` (optional, ≤5000, default `''`); all strings trimmed and rejecting whitespace-only (data-model §2)
-- [X] T022 [US1] Build the letterhead **header** band in `lib/chrome.ts` — `linear-gradient(#111111 → #0a0436)`, `clip-path` diagonal cut on the lower edge, WHAZ wordmark in Montserrat Black with SVG star accent, vertical divider rules, the `AI + HUMAN MIND SYSTEM` / `Better Decisions. Real Growth.` label stack, and the contact block (envelope SVG + `whazpk@gmail.com`, social SVG chips + `/thewhaz`) — per `design.md` §5 and research R1
-- [X] T023 [US1] Build the letterhead **footer** band in `lib/chrome.ts` — mirrored gradient and `clip-path` cut on the upper edge, 4-point star SVG, divider, `CLARITY. STRATEGY. EXECUTION. RESULTS.` tagline with its two-line muted sub-line, and the `radial-gradient` dot-grid texture at bottom-right
+- [~] T022 [US1] ~~Build the letterhead **header** band in `lib/chrome.ts`~~ — **SUPERSEDED by constitution v3.0.0** (bands now come from the embedded raster; original text retained as the record): — `linear-gradient(#111111 → #0a0436)`, `clip-path` diagonal cut on the lower edge, WHAZ wordmark in Montserrat Black with SVG star accent, vertical divider rules, the `AI + HUMAN MIND SYSTEM` / `Better Decisions. Real Growth.` label stack, and the contact block (envelope SVG + `whazpk@gmail.com`, social SVG chips + `/thewhaz`) — per `design.md` §5 and research R1
+- [~] T023 [US1] ~~Build the letterhead **footer** band in `lib/chrome.ts`~~ — **SUPERSEDED by constitution v3.0.0** (see T022; original text retained as the record): — mirrored gradient and `clip-path` cut on the upper edge, 4-point star SVG, divider, `CLARITY. STRATEGY. EXECUTION. RESULTS.` tagline with its two-line muted sub-line, and the `radial-gradient` dot-grid texture at bottom-right
 - [X] T024 [US1] Export `CHROME_CSS` from `lib/chrome.ts` positioning both bands as `position: fixed` (top/bottom) so Chromium repeats them on every page, with `@page { size: A4; margin: 0 }` and body padding from `lib/geometry.ts` (research R4, FR-012)
 - [X] T025 [US1] Implement `ProposalViewModel` derivation in `lib/view-model.ts` — pass-through fields, locale-independent `formattedDate` (e.g. `19 July 2026`), `notesHtml` via `escapeHtmlWithBreaks()`, and `hasNotes` (data-model §3)
 - [X] T026 [US1] Implement `buildProposalHtml(vm)` in `lib/template.ts` — full HTML document assembling `@font-face` from `lib/fonts.ts`, `CHROME_CSS`, and the letter body (salutation → intro → notes → closing → signature block), escaping every rep value at interpolation (FR-014, FR-008)
@@ -88,8 +88,8 @@ Single Next.js App Router project at repository root (per `plan.md` Structure De
 - [X] T030 [US1] Add the in-progress indicator to `components/ProposalForm.tsx` — visible from submit until the download begins, with the submit control disabled while pending (FR-016)
 - [X] T031 [US1] Create the form page in `app/page.tsx` rendering `ProposalForm`
 - [X] T032 [US1] Manually verify a generated PDF opens correctly and body text clears both diagonal cuts at top and bottom (adjust `lib/geometry.ts` padding if it collides)
-- [X] T033 [US1] Verify chrome text is **real selectable text** in the output PDF — select and copy `whazpk@gmail.com` from the rendered file (Constitution v2.0.0 Principle II)
-- [X] T034 [US1] ⚠️ **REQUIRED FIDELITY REVIEW** — compare the rendered chrome side-by-side against `docs/header.png`, `docs/footer.png`, and `docs/reference-letter-head.pdf`, checking gradient direction/endpoints, diagonal-cut corner and angle, divider positions, icon shapes, dot-grid density/placement, and Montserrat Black letterforms against the reference wordmark. Constitution v2.0.0 makes this a blocking review step — record the outcome before merge (`quickstart.md` checklist)
+- [~] T033 [US1] ~~Verify chrome text is **real selectable text** in the output PDF — select and copy `whazpk@gmail.com` from the rendered file~~ — **WITHDRAWN by constitution v3.0.0**: the letterhead is now the approved raster, so its contact text is pixels by design. The surviving requirement is that *body* text remains selectable and searchable.
+- [X] T034 [US1] ⚠️ **REQUIRED FIDELITY REVIEW** — **redefined by constitution v3.0.0**: the chrome is now the approved artwork itself, so per-element visual comparison of gradients/cuts/icons no longer applies. The blocking check is now **numeric** — extract text baselines from a rendered PDF and confirm every fixed element agrees with `docs/reference-letter-head.pdf` to within 0.5mm, and that table row pitch is a uniform 6.35mm (`quickstart.md` checklist). Last measured: ≤0.11mm.
 
 **Checkpoint**: US1 is fully functional — a rep can produce a correctly branded PDF. **This is the demoable MVP.**
 
@@ -152,12 +152,12 @@ Single Next.js App Router project at repository root (per `plan.md` Structure De
 - [X] T055 [P] Determinism test in `tests/integration/generate.spec.ts` — submit an identical payload twice and assert the two PDF buffers are byte-comparable (contract case 7, FR-007, SC-005)
 - [X] T056 [P] Multi-page test in `tests/integration/generate.spec.ts` — notes long enough to overflow one page produce a >1-page PDF with header and footer chrome on **every** page and no truncation (contract case 8, FR-012)
 - [X] T057 [P] Edge-case tests in `tests/unit/template.test.ts` — very long service descriptions wrap without pushing content under the footer; special/non-Latin characters render without breaking layout (spec Edge Cases)
-- [X] T058 Verify no network request occurs during render — assert fonts are inlined and no brand raster is bundled or fetched (Constitution v2.0.0 Security Requirements + Technology Constraints)
+- [X] T058 Verify no network request occurs during render — assert fonts and the letterhead raster are **inlined as data URIs** and nothing is fetched (Constitution v3.0.0 Security Requirements + Technology Constraints). Note: under v3.0.0 one brand raster *is* bundled by design; the requirement is that it is inlined, not absent.
 - [X] T059 Measure cold-start and warm generation timings against the ≤30 s worst case; confirm `maxDuration = 60` headroom is sufficient (FR-016, SC-008) — **measured on a production build: cold 9.3 s, warm 1.2–3.4 s. Both inside the 30 s bar.**
 - [X] T060 [P] Write `README.md` — setup, scripts, deploy, and the note that `docs/*.png` are visual reference only and must never be bundled
 - [X] T061 Run the full `quickstart.md` verification checklist end-to-end, including the determinism, injection, and multi-page checks
 - [ ] T062 Deploy to Vercel (Hobby, Node runtime) and re-run the quickstart verification against the deployed URL
-- [X] T063 Update `CLAUDE.md` — flip "greenfield, no `package.json`" to reflect the implemented app, and record the real build/test/deploy commands (Constitution v2.0.0 Workflow Rules)
+- [X] T063 Update `CLAUDE.md` — flip "greenfield, no `package.json`" to reflect the implemented app, and record the real build/test/deploy commands (Constitution v3.0.0 Workflow Rules)
 
 ---
 
@@ -242,7 +242,7 @@ Coordinate on the four shared files noted under User Story Dependencies.
 
 ## Notes
 
-- **T034 is a constitutional requirement, not a courtesy** — Principle II (v2.0.0) makes the fidelity comparison a blocking review step, because the CSS chrome has no authoritative raster backing it in the output path.
+- **T034 is a constitutional requirement, not a courtesy** — Principle II (v3.0.0) makes the fidelity check a blocking review step. Under v3.0.0 it is a *numeric* check (≤0.5mm baseline agreement with the reference), because a visual review of this feature passed a 5.1mm layout error undetected.
 - **Never bundle `docs/header.png` / `docs/footer.png`** — they are visual reference only (Technology Constraints).
 - `[P]` tasks touch different files with no incomplete dependencies.
 - Verify tests fail before implementing.

@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { escapeHtml, escapeHtmlWithBreaks } from '../../lib/escape';
+import { escapeHtml } from '../../lib/escape';
 
 describe('escapeHtml', () => {
   it('escapes all five structural characters', () => {
@@ -28,28 +28,5 @@ describe('escapeHtml', () => {
 
   it('escapes an attribute-breaking payload', () => {
     expect(escapeHtml('" onload="evil()')).toBe('&quot; onload=&quot;evil()');
-  });
-});
-
-describe('escapeHtmlWithBreaks', () => {
-  it('converts newlines to <br> after escaping', () => {
-    expect(escapeHtmlWithBreaks('line one\nline two')).toBe('line one<br>line two');
-  });
-
-  it('normalises CRLF and CR line endings', () => {
-    expect(escapeHtmlWithBreaks('a\r\nb\rc')).toBe('a<br>b<br>c');
-  });
-
-  it('keeps a rep-typed <br> literal — escaping must run first', () => {
-    // If breaks were inserted before escaping, this would become a real line break.
-    expect(escapeHtmlWithBreaks('<br>')).toBe('&lt;br&gt;');
-  });
-
-  it('escapes markup that spans a newline', () => {
-    expect(escapeHtmlWithBreaks('<b>\nbold')).toBe('&lt;b&gt;<br>bold');
-  });
-
-  it('preserves blank lines between paragraphs', () => {
-    expect(escapeHtmlWithBreaks('para one\n\npara two')).toBe('para one<br><br>para two');
   });
 });
