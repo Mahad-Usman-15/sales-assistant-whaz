@@ -30,15 +30,19 @@ async function launchBrowser(): Promise<Browser> {
 }
 
 /**
- * Cap on renders sharing one instance at the same moment.
+ * Renders are serialised per instance — ONE at a time.
  *
- * Pages are cheap but not free: a burst of concurrent renders is N live page trees in one 1 GB
- * function. Two keeps peak memory well inside the limit while still overlapping Chromium's I/O
- * waits. Raise only with a measured concurrent-burst test.
+ * Not a memory tuning: the instance keeps a single long-lived page (see getPage), and one page
+ * cannot serve two renders at once without them clobbering each other's document. Concurrency
+ * comes from Vercel running more instances, not from more pages per instance, which is the right
+ * axis anyway — each instance holds its own Chromium.
+ *
+ * At ~700ms per warm render and 10–50 proposals/day, queueing costs nothing observable.
  */
-const MAX_CONCURRENT_RENDERS = 2;
+const MAX_CONCURRENT_RENDERS = 1;
 
 let browserPromise: Promise<Browser> | null = null;
+let pagePromise: Promise<Page> | null = null;
 let activeRenders = 0;
 const slotQueue: Array<() => void> = [];
 
@@ -123,7 +127,44 @@ async function getBrowser(): Promise<Browser> {
 
   browserLaunches += 1;
   browserPromise = launchBrowser();
+  pagePromise = null; // a new browser invalidates any page from the previous one
   return browserPromise;
+}
+
+/**
+ * Returns the instance's single long-lived page, creating it only if there isn't a usable one.
+ *
+ * ⚠️ THE PAGE IS NEVER CLOSED, AND THAT IS THE POINT. @sparticuz/chromium launches with
+ * `--no-startup-window` (visible in the launch args in Vercel's logs), so the browser starts with
+ * zero windows. The page created here is the ONLY window — closing it drops the count to zero and
+ * Chromium exits.
+ *
+ * This was learned twice, expensively. First attempt: a BrowserContext per request, closed in a
+ * `finally`. Second: a Page per request, closed in a `finally`. Both killed the browser after every
+ * render, so `getBrowser()` relaunched it on the next one, and every relaunch left another
+ * ~40 MB /tmp profile directory behind — reproducing the original disk-exhaustion defect that the
+ * browser reuse existed to fix. Measured on Vercel 2026-08-02: one instance served 20 sequential
+ * requests and relaunched Chromium 17 times, with 3 successes.
+ *
+ * `setContent()` replaces the whole document, so reuse needs no cleanup. Determinism across a
+ * reused page is asserted by tests/scale/render-scale.test.ts, which requires 100 consecutive
+ * renders to be byte-identical AND `browserLaunches` to stay at 1.
+ */
+async function getPage(): Promise<Page> {
+  const browser = await getBrowser();
+
+  if (pagePromise) {
+    const existing = await pagePromise.catch(() => null);
+    // `context().browser()` guards the case where the browser was replaced underneath us: a page
+    // belonging to a dead browser can still report !isClosed().
+    if (existing && !existing.isClosed() && existing.context().browser() === browser) {
+      return existing;
+    }
+    pagePromise = null;
+  }
+
+  pagePromise = browser.newPage();
+  return pagePromise;
 }
 
 /**
@@ -163,28 +204,9 @@ function pinTimestamps(pdf: Buffer, proposalDate: string): Buffer {
 export async function renderPdf(html: string, proposalDate?: string): Promise<Buffer> {
   await acquireRenderSlot();
 
-  let page: Page | null = null;
-
   try {
-    const browser = await getBrowser();
+    const page = await getPage();
     rendersServed += 1;
-
-    // ⚠️ A PAGE, not a BrowserContext. `browser.newContext()` looks like the tidier choice — it is
-    // what you would reach for to isolate requests — and it is WRONG here.
-    //
-    // @sparticuz/chromium launches with `--single-process --no-zygote` (verifiable in the launch
-    // args in Vercel's logs). Under --single-process, closing a BrowserContext tears down the whole
-    // browser, so a per-request context.close() destroys the very browser it is meant to preserve.
-    // Observed on Vercel 2026-08-02: renders alternated ok/fail/ok/fail — each success killed the
-    // browser, the next request found it dead, the one after relaunched it — and every relaunch
-    // left another /tmp profile dir behind, so it failed outright from request ~8. That is the
-    // original defect, reintroduced at half rate by a "fix".
-    //
-    // A page is a tab in the default context. Closing one is ordinary, and the browser survives.
-    // Context isolation buys nothing here anyway: the document is set with setContent(), issues no
-    // network requests by design, and touches no cookies or storage. Determinism is asserted
-    // independently by tests/scale/render-scale.test.ts.
-    page = await browser.newPage();
 
     // 'load' is sufficient and cheaper than networkidle: the document makes no network
     // requests at all by design (constitution: Security Requirements).
@@ -199,10 +221,10 @@ export async function renderPdf(html: string, proposalDate?: string): Promise<Bu
 
     return proposalDate ? pinTimestamps(pdf, proposalDate) : pdf;
   } finally {
-    // Close the PAGE only. Closing the browser here was the original /tmp exhaustion defect;
-    // closing a context was the same defect wearing a disguise. The browser is instance-scoped
-    // and outlives every individual request.
-    await page?.close().catch(() => undefined);
+    // ⚠️ Nothing is closed here — not the browser, not a context, not the page. Each of those was
+    // tried and each killed Chromium under @sparticuz/chromium's launch flags, forcing a relaunch
+    // that leaked ~40 MB of /tmp. See getPage(). The browser and its single page are
+    // instance-scoped and outlive every request; they are replaced only when they actually die.
     releaseRenderSlot();
   }
 }

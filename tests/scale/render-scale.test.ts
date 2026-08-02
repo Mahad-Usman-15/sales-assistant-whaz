@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { renderPdf } from '../../lib/pdf';
+import { renderPdf, getRenderStats } from '../../lib/pdf';
 import { buildProposalHtml } from '../../lib/template';
 import { toViewModel } from '../../lib/view-model';
 
@@ -54,6 +54,7 @@ describe(`${COUNT} sequential renders`, () => {
     const quarter = Math.floor(COUNT / 4);
     const rssFirst = mean(rss.slice(0, quarter));
     const rssLast = mean(rss.slice(-quarter));
+    const stats = getRenderStats();
 
     console.log(
       `\n  renders  ${timings.length}/${COUNT}` +
@@ -61,10 +62,28 @@ describe(`${COUNT} sequential renders`, () => {
         `\n  median   ${sorted[Math.floor(sorted.length / 2)]}ms` +
         `\n  p95      ${sorted[Math.floor(sorted.length * 0.95)]}ms` +
         `\n  max      ${sorted[sorted.length - 1]}ms` +
-        `\n  rss      ${Math.round(rssFirst)}MB -> ${Math.round(rssLast)}MB (x${(rssLast / rssFirst).toFixed(2)})\n`
+        `\n  rss      ${Math.round(rssFirst)}MB -> ${Math.round(rssLast)}MB (x${(rssLast / rssFirst).toFixed(2)})` +
+        `\n  launches ${stats.browserLaunches}\n`
     );
 
     expect(timings).toHaveLength(COUNT);
     expect(rssLast / rssFirst).toBeLessThan(GROWTH_LIMIT);
+
+    /**
+     * ⚠️ The assertion that matters most, and the one that was missing.
+     *
+     * Every /tmp exhaustion incident in this project traces to Chromium being relaunched: the
+     * original per-request launch/close, then a per-request BrowserContext, then a per-request
+     * Page — each killed the browser under @sparticuz/chromium's flags, and each relaunch leaked
+     * ~40 MB of /tmp. Passing renders and flat memory did NOT catch any of them; a relaunch count
+     * would have caught all three immediately.
+     *
+     * One launch for the life of the process. More means the browser is dying.
+     */
+    expect(
+      stats.browserLaunches,
+      `Chromium was launched ${stats.browserLaunches}x across ${COUNT} renders — it should launch once. ` +
+        'Something is closing the browser, a context, or the only page.'
+    ).toBe(1);
   }, 3_600_000);
 });
