@@ -40,6 +40,29 @@ const MAX_CONCURRENT_RENDERS = 2;
 
 let browserPromise: Promise<Browser> | null = null;
 let activeRenders = 0;
+
+/**
+ * Per-process identity and counters, exposed as response headers by the generate route.
+ *
+ * SC-009 asserts "N sequential renders on the SAME WARM INSTANCE", and that is not observable from
+ * outside without this: `x-vercel-id`'s trailing segment is a per-REQUEST id, so counting distinct
+ * values measures nothing. A run spread across N cold instances — each with an empty /tmp — would
+ * otherwise be indistinguishable from a genuine sustained-use run, and would pass for the wrong
+ * reason.
+ *
+ * Module scope, so it resets exactly when the process does.
+ */
+const INSTANCE_ID = Math.random().toString(36).slice(2, 10);
+let rendersServed = 0;
+let browserLaunches = 0;
+
+export function getRenderStats(): {
+  instanceId: string;
+  rendersServed: number;
+  browserLaunches: number;
+} {
+  return { instanceId: INSTANCE_ID, rendersServed, browserLaunches };
+}
 const slotQueue: Array<() => void> = [];
 
 async function acquireRenderSlot(): Promise<void> {
@@ -95,6 +118,7 @@ async function getBrowser(): Promise<Browser> {
     if (existing) await existing.close().catch(() => undefined);
   }
 
+  browserLaunches += 1;
   browserPromise = launchBrowser();
   return browserPromise;
 }
@@ -140,6 +164,7 @@ export async function renderPdf(html: string, proposalDate?: string): Promise<Bu
 
   try {
     const browser = await getBrowser();
+    rendersServed += 1;
 
     // Per-request isolation is a CONTEXT, never a browser. Contexts share the running Chromium
     // process, so they cost no /tmp — which is the whole fix. See getBrowser().

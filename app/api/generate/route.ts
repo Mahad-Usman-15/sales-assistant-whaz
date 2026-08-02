@@ -3,7 +3,7 @@ import { CATALOG_IDS } from '@/lib/catalog';
 import { toViewModel } from '@/lib/view-model';
 import { buildProposalHtml } from '@/lib/template';
 import { buildFilename } from '@/lib/filename';
-import { renderPdf } from '@/lib/pdf';
+import { renderPdf, getRenderStats } from '@/lib/pdf';
 
 // Chromium requires the full Node.js runtime; the Edge runtime cannot run it.
 export const runtime = 'nodejs';
@@ -86,20 +86,39 @@ export async function POST(request: Request): Promise<Response> {
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': String(pdf.byteLength),
         'Cache-Control': 'no-store',
+        ...renderStatsHeaders(),
       },
     });
   } catch (error) {
     // Log server-side for debugging; the rep sees a plain retryable message, never a stack trace.
-    console.error('[generate] PDF render failed:', error);
+    // The instance id is logged too, so a log line can be tied to the request that produced it.
+    console.error(`[generate] PDF render failed on instance ${getRenderStats().instanceId}:`, error);
     return Response.json(
       {
         error: 'generation_failed',
         message: "We couldn't generate the proposal. Please try again.",
         retryable: true,
       },
-      { status: 500 }
+      { status: 500, headers: renderStatsHeaders() }
     );
   }
+}
+
+/**
+ * Diagnostic headers identifying which process served the request and how much work it had already
+ * done. Present on BOTH the success and failure paths — the failure path is where they matter,
+ * since "this instance had already rendered N times" is exactly what distinguishes resource
+ * exhaustion from a cold-start problem, and that is unknowable from outside otherwise.
+ *
+ * Carries no user or proposal data, and does not affect the PDF bytes (FR-013).
+ */
+function renderStatsHeaders(): Record<string, string> {
+  const stats = getRenderStats();
+  return {
+    'x-render-instance': stats.instanceId,
+    'x-render-count': String(stats.rendersServed),
+    'x-browser-launches': String(stats.browserLaunches),
+  };
 }
 
 export const GET = methodNotAllowed;
