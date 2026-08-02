@@ -120,6 +120,20 @@ as "the tool is broken" with nothing in the app's logs — the app is not in the
 
 ---
 
+## Deploying to Vercel
+
+⚠️ **`generated/prisma` is gitignored, so it does not exist in a fresh clone.** `npm run build` is
+therefore `prisma generate && next build` — without the first half, Vercel builds a tree where
+`server/db/client.ts` imports a module that was never generated.
+
+⚠️ **`DIRECT_URL` must be present in Vercel's BUILD environment, not only at runtime.**
+`prisma.config.ts` resolves it via `env()`, and `prisma generate` aborts with `PrismaConfigEnvError`
+if it is unset — so the build fails before Next.js starts. Set all five variables from
+`.env.example` for the Preview and Production environments.
+
+⚠️ **Set them as plain environment variables, not from a `.env` file.** Vercel does not read
+`.env.local`; that file is local-only and gitignored.
+
 ## Phase gates
 
 Run in order. Each gate is a spec Success Criterion, not a vibe.

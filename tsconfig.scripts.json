@@ -1,0 +1,14 @@
+{
+  // Type-checks operator tooling in `scripts/`, which tsconfig.json deliberately excludes so that
+  // a standalone script can never fail an application build (see the comment there).
+  //
+  // Run via `npm run typecheck:scripts`. These files import build artifacts such as
+  // generated/prisma, so run `npx prisma generate` first if the client is not present.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "noEmit": true,
+    "types": ["node"]
+  },
+  "include": ["scripts/**/*.ts"],
+  "exclude": ["node_modules"]
+}
