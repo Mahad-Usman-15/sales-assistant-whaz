@@ -1,3 +1,15 @@
+> ## ⚠️ HISTORICAL RECORD — NOT THE SOURCE OF TRUTH
+>
+> **Status as of 2026-08-01: superseded. Do not treat anything below as current scope.**
+>
+> This file is the original **planning prompt** that was used in 2026-07 to produce `projectplan.md`.
+> It is a prompt, not a specification — it describes a task that was completed months ago. It is kept
+> for provenance only.
+>
+> Its "Initial Idea" and "Constraints" describe the v1 MVP and no longer bound new work. Authority
+> now lives in `.specify/memory/constitution.md` (v4.0.1) and `specs/<feature>/spec.md`.
+> `projectplan.md`, which this prompt produced, is likewise a historical record.
+
 /plan
 # Planning for the Tool v1
 

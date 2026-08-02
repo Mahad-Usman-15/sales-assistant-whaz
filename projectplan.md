@@ -1,5 +1,34 @@
 # Project Plan: Whaz Proposal Letterhead Generator (v1)
 
+> ## ⚠️ HISTORICAL RECORD — NOT THE SOURCE OF TRUTH
+>
+> **Status as of 2026-08-01: superseded. Do not treat anything below as current scope.**
+>
+> This document records how the **v1 MVP** was decided in 2026-07 — the business problem, the three
+> options that were compared, and why one was chosen. It was accurate when written and it is kept as
+> the provenance record for those decisions. It is **not** a specification, and it does **not**
+> govern new work.
+>
+> **Known to be out of date.** §8/§9/§10 state that v1 has "no login, no database, no stored
+> history," that every request is stateless, and that a DB/CMS is a v2 trigger conditioned on MVP
+> validation. Constitution **v4.0.0** (2026-08-01) redefined Principle III and now *requires*
+> authentication and persistence; feature `002-rbac-dashboard` is building them. §8/§9 also carried a
+> since-falsified assumption that an editable vector letterhead source exists, and the service-count
+> figure here is a known off-by-one against `tools.md`.
+>
+> **Where authority actually lives now:**
+>
+> | Question | Authoritative source |
+> |---|---|
+> | What is binding on any change | `.specify/memory/constitution.md` (v4.0.1) |
+> | What a feature must do | `specs/<feature>/spec.md` |
+> | How a PDF is produced | `docs/ARCHITECTURE.md` |
+> | The service catalogue | `tools.md` |
+> | Brand and letterhead | `design.md`, `docs/reference-letter-head.pdf` |
+>
+> New features are specified against the constitution and their own spec. They are **not** measured
+> against this document's MVP scope, and nothing here blocks or bounds them.
+
 ## 1. Problem & Root-Cause Analysis
 
 **Symptom:** The Whaz sales team generates client proposal letterheads daily by manually prompting general-purpose AI chat tools (ChatGPT, Gemini). About **70% of generated proposals fail** — meaning the rep has to re-prompt, edit, or abandon the attempt. Failure modes include: hallucinated business claims/figures, inconsistent visual layout between runs, the AI returning raw code/markdown instead of a finished document, no reliable path to a downloadable PDF, and hitting free-tier usage limits mid-workflow. The team has limited prompt-engineering skill, so they cannot reliably work around these failures.

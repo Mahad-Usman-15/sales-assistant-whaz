@@ -264,7 +264,9 @@ if (Test-Path $template) {
 
 # Auto-create history/prompts/<branch-name>/ directory (same as specs/<branch-name>/)
 # This keeps naming consistent across branch, specs, and prompts directories
-$promptsDir = Join-Path $repoRoot 'history' 'prompts' $branchName
+# Built up one segment at a time: Windows PowerShell 5.1's Join-Path takes exactly two paths,
+# so the 3-argument form silently binds 'prompts' as a positional arg and throws.
+$promptsDir = Join-Path (Join-Path (Join-Path $repoRoot 'history') 'prompts') $branchName
 New-Item -ItemType Directory -Path $promptsDir -Force | Out-Null
 
 # Set the SPECIFY_FEATURE environment variable for the current session

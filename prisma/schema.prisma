@@ -1,0 +1,124 @@
+// Data model for feature 002-rbac-dashboard.
+// Rationale for every table, column, and FK action: specs/002-rbac-dashboard/data-model.md
+//
+// Prisma 7: the `prisma-client` generator (not `prisma-client-js`) with a mandatory `output`,
+// driven by a driver adapter at runtime.
+//
+// ⚠️ `url`, `directUrl`, and `shadowDatabaseUrl` are REJECTED here in v7 — schema validation
+// fails outright (P1012), it is not a deprecation warning. Connection configuration lives in
+// prisma.config.ts (CLI/migrations) and in the adapter passed to `new PrismaClient()` (runtime).
+
+generator client {
+  provider = "prisma-client"
+  output   = "../generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+}
+
+enum Role {
+  ADMIN
+  SALES
+}
+
+enum UserStatus {
+  ACTIVE
+  INACTIVE
+}
+
+enum InvitationStatus {
+  PENDING
+  ACCEPTED
+  EXPIRED
+  REVOKED
+}
+
+/// The application's identity record (spec entity: Member).
+///
+/// Exists separately from auth.users because Supabase owns that schema and migrates it — modelling
+/// it here would invite a migration that drops it — yet role, status, and history need a stable
+/// row to attach to.
+model AppUser {
+  /// Equals auth.users.id. The cross-schema FK (ON DELETE RESTRICT) is added by a hand-written
+  /// migration; Prisma cannot express a relation into the `auth` schema.
+  id            String     @id @db.Uuid
+  /// citext, so FR-028 (case-insensitive identity) is a database property rather than a
+  /// convention every call site must remember. Denormalised from auth.users so rendering the
+  /// members list needs no admin-API call per row.
+  email         String     @unique @db.Citext
+  role          Role       @default(SALES)
+  /// Defaults to INACTIVE deliberately: an auth user created without a matching invitation lands
+  /// denied, with an audit row, rather than as "no row" which is indistinguishable from a bug.
+  status        UserStatus @default(INACTIVE)
+  deactivatedAt DateTime?  @map("deactivated_at") @db.Timestamptz(6)
+  /// Drives the 30-day sliding session (FR-041). Written coarsely — only when more than an hour
+  /// stale — because this sits on a read path.
+  lastSeenAt    DateTime   @default(now()) @map("last_seen_at") @db.Timestamptz(6)
+  createdAt     DateTime   @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// SET NULL, not RESTRICT: an inviter leaving must not block their own removal. Losing the
+  /// pointer is acceptable where losing the invitee would not be.
+  invitedById String?   @map("invited_by_id") @db.Uuid
+  invitedBy   AppUser?  @relation("UserInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+  invitees    AppUser[] @relation("UserInvitedBy")
+
+  invitationsSent Invitation[]    @relation("InvitationInvitedBy")
+  generations     PdfGeneration[]
+
+  /// Serves the active-Admin count in the hot invariant path (FR-033) and the active-member
+  /// tile (FR-019).
+  @@index([role, status])
+  @@map("app_user")
+}
+
+/// A pending grant of access (spec entity: Invitation).
+///
+/// ⚠️ This table exists for a security reason, not just a product one. The role an Admin chose
+/// must survive the gap between "invited" and "signed in" in a form the invitee cannot alter.
+/// The obvious carrier — Supabase's raw_user_meta_data / user_metadata — is writable by the
+/// subject via updateUser(), i.e. a privilege-escalation primitive. A server-owned row is the
+/// only trustworthy carrier (FR-010, FR-023, constitution Principle VI).
+model Invitation {
+  id     String           @id @default(uuid(7)) @db.Uuid
+  email  String           @db.Citext
+  role   Role
+  status InvitationStatus @default(PENDING)
+
+  /// Nullable for exactly one case: the first Admin, created by scripts/bootstrap-admin.ts when
+  /// no member exists yet and there is therefore nobody to have issued the invitation. NULL is the
+  /// truthful representation of "self-bootstrapped"; a synthetic system user would be a fiction in
+  /// the audit trail (FR-029). Every invitation created through the dashboard has an inviter,
+  /// because inviteUser() requires an AdminActor.
+  invitedById String?  @map("invited_by_id") @db.Uuid
+  invitedBy   AppUser? @relation("InvitationInvitedBy", fields: [invitedById], references: [id], onDelete: SetNull)
+
+  expiresAt  DateTime  @map("expires_at") @db.Timestamptz(6)
+  acceptedAt DateTime? @map("accepted_at") @db.Timestamptz(6)
+  createdAt  DateTime  @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// FR-024 is enforced by a PARTIAL unique index on (email) WHERE status = 'PENDING', which
+  /// Prisma cannot express — it is added in the hand-written migration. Two admins inviting the
+  /// same address concurrently then collide on P2002 instead of racing a read-then-write check.
+  @@index([status, expiresAt])
+  @@map("invitation")
+}
+
+/// One successfully delivered proposal (spec entity: Usage Record).
+///
+/// Stores no proposal content and no client details (FR-017): a count needs nothing more, and the
+/// constitution's Security Requirements discourage unnecessary retention.
+model PdfGeneration {
+  id String @id @default(uuid(7)) @db.Uuid
+
+  /// RESTRICT is what makes "removing a member does not rewrite history" (FR-021) structural
+  /// rather than a convention someone can forget.
+  userId String  @map("user_id") @db.Uuid
+  user   AppUser @relation(fields: [userId], references: [id], onDelete: Restrict)
+
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz(6)
+
+  /// Serves both the personal count (FR-018) and any future time filter, without a second index.
+  @@index([userId, createdAt])
+  @@map("pdf_generation")
+}

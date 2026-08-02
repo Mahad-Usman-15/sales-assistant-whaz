@@ -95,7 +95,7 @@ The wider project documents:
 
 | Document | What it holds |
 |---|---|
-| `projectplan.md` | The business case and why this approach was chosen |
+| `projectplan.md` | ⚠️ Historical — how the 2026-07 MVP was decided. Superseded; not current scope |
 | `.specify/memory/constitution.md` | The binding principles the build has to honour |
 | `tools.md` | The service catalogue — the source of truth |
 | `design.md` | Brand colours, type, and the letterhead specification |

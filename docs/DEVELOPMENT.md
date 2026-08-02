@@ -107,7 +107,7 @@ the client approved, so that is the bar. `docs/header.png` / `docs/footer.png` r
 only — never bundle them.** The reasoning and the rejected alternatives are in
 `history/adr/0001-letterhead-chrome-strategy.md`.
 
-**Fidelity is verified numerically, not visually** — constitution v3.0.0 Principle II sets a 0.5mm
+**Fidelity is verified numerically, not visually** — constitution Principle II sets a 0.5mm
 tolerance, and a visual review of this feature once passed a 5.1mm error. Before merging any layout
 change, render a proposal and compare text baselines against the reference (full table in
 `specs/001-proposal-pdf-generator/quickstart.md`; current build agrees to ≤0.11mm):
@@ -175,10 +175,10 @@ If the function fails to deploy or times out, check in this order:
 
 | Document | What it holds |
 |---|---|
-| `.specify/memory/constitution.md` | Binding principles (v3.0.0) |
+| `.specify/memory/constitution.md` | Binding principles (v4.0.0) |
 | `specs/001-proposal-pdf-generator/` | Spec, plan, research, data model, API contract, tasks |
 | `history/adr/` | Architecture decision records |
 | `design.md` | Brand tokens and the §5 letterhead spec |
 | `WEB_DESIGN.md` | Design tokens for the browser form UI |
 | `tools.md` | Service catalog (source of truth) |
-| `projectplan.md` | Business case and architecture decisions |
+| `projectplan.md` | ⚠️ Historical record of the 2026-07 MVP decision — superseded, not current scope |
