@@ -1,4 +1,4 @@
-import { chromium as playwrightChromium, type Browser } from 'playwright-core';
+import { chromium as playwrightChromium, type Browser, type Page } from 'playwright-core';
 
 /**
  * HTML -> PDF rendering via headless  Chromium (research.md R3).
@@ -32,14 +32,15 @@ async function launchBrowser(): Promise<Browser> {
 /**
  * Cap on renders sharing one instance at the same moment.
  *
- * Contexts are isolated from each other but their memory is not: a burst of concurrent renders
- * is N live page trees in one 1 GB function. Two keeps peak memory well inside the limit while
- * still overlapping Chromium's I/O waits. Raise only with a measured concurrent-burst test.
+ * Pages are cheap but not free: a burst of concurrent renders is N live page trees in one 1 GB
+ * function. Two keeps peak memory well inside the limit while still overlapping Chromium's I/O
+ * waits. Raise only with a measured concurrent-burst test.
  */
 const MAX_CONCURRENT_RENDERS = 2;
 
 let browserPromise: Promise<Browser> | null = null;
 let activeRenders = 0;
+const slotQueue: Array<() => void> = [];
 
 /**
  * Per-process identity and counters, exposed as response headers by the generate route.
@@ -48,9 +49,10 @@ let activeRenders = 0;
  * outside without this: `x-vercel-id`'s trailing segment is a per-REQUEST id, so counting distinct
  * values measures nothing. A run spread across N cold instances — each with an empty /tmp — would
  * otherwise be indistinguishable from a genuine sustained-use run, and would pass for the wrong
- * reason.
+ * reason. `browserLaunches` is the sharper signal: on a healthy instance it stays at 1 forever,
+ * and any growth means the browser is dying and being relaunched.
  *
- * Module scope, so it resets exactly when the process does.
+ * Module scope, so these reset exactly when the process does.
  */
 const INSTANCE_ID = Math.random().toString(36).slice(2, 10);
 let rendersServed = 0;
@@ -63,7 +65,6 @@ export function getRenderStats(): {
 } {
   return { instanceId: INSTANCE_ID, rendersServed, browserLaunches };
 }
-const slotQueue: Array<() => void> = [];
 
 async function acquireRenderSlot(): Promise<void> {
   if (activeRenders < MAX_CONCURRENT_RENDERS) {
@@ -95,8 +96,10 @@ function releaseRenderSlot(): void {
  * ~40 MB per launch is ~7 renders, which is exactly where production failed — and it stayed
  * failed, because a full disk does not heal until the instance is recycled.
  *
- * A BrowserContext lives inside the running browser process and creates no profile directory,
- * so per-request isolation now costs no disk at all.
+ * A page is just a tab in the running browser process and creates no profile directory, so
+ * per-request work now costs no disk at all. (⚠️ A BrowserContext would ALSO cost no disk, and is
+ * still wrong here — see the comment in renderPdf: under --single-process, closing one kills the
+ * browser and forces a relaunch, which is exactly the leak this function exists to prevent.)
  *
  * ⚠️ Do NOT add a "recycle the browser every N renders" safety valve. It was tried and removed:
  * each relaunch re-incurs the ~40 MB /tmp cost, reintroducing the original defect at 1/N the
@@ -160,16 +163,28 @@ function pinTimestamps(pdf: Buffer, proposalDate: string): Buffer {
 export async function renderPdf(html: string, proposalDate?: string): Promise<Buffer> {
   await acquireRenderSlot();
 
-  let context: Awaited<ReturnType<Browser['newContext']>> | null = null;
+  let page: Page | null = null;
 
   try {
     const browser = await getBrowser();
     rendersServed += 1;
 
-    // Per-request isolation is a CONTEXT, never a browser. Contexts share the running Chromium
-    // process, so they cost no /tmp — which is the whole fix. See getBrowser().
-    context = await browser.newContext();
-    const page = await context.newPage();
+    // ⚠️ A PAGE, not a BrowserContext. `browser.newContext()` looks like the tidier choice — it is
+    // what you would reach for to isolate requests — and it is WRONG here.
+    //
+    // @sparticuz/chromium launches with `--single-process --no-zygote` (verifiable in the launch
+    // args in Vercel's logs). Under --single-process, closing a BrowserContext tears down the whole
+    // browser, so a per-request context.close() destroys the very browser it is meant to preserve.
+    // Observed on Vercel 2026-08-02: renders alternated ok/fail/ok/fail — each success killed the
+    // browser, the next request found it dead, the one after relaunched it — and every relaunch
+    // left another /tmp profile dir behind, so it failed outright from request ~8. That is the
+    // original defect, reintroduced at half rate by a "fix".
+    //
+    // A page is a tab in the default context. Closing one is ordinary, and the browser survives.
+    // Context isolation buys nothing here anyway: the document is set with setContent(), issues no
+    // network requests by design, and touches no cookies or storage. Determinism is asserted
+    // independently by tests/scale/render-scale.test.ts.
+    page = await browser.newPage();
 
     // 'load' is sufficient and cheaper than networkidle: the document makes no network
     // requests at all by design (constitution: Security Requirements).
@@ -184,9 +199,10 @@ export async function renderPdf(html: string, proposalDate?: string): Promise<Bu
 
     return proposalDate ? pinTimestamps(pdf, proposalDate) : pdf;
   } finally {
-    // Close the CONTEXT only. Closing the browser here is what caused the /tmp exhaustion
-    // defect; the browser is instance-scoped and outlives every individual request.
-    await context?.close().catch(() => undefined);
+    // Close the PAGE only. Closing the browser here was the original /tmp exhaustion defect;
+    // closing a context was the same defect wearing a disguise. The browser is instance-scoped
+    // and outlives every individual request.
+    await page?.close().catch(() => undefined);
     releaseRenderSlot();
   }
 }
