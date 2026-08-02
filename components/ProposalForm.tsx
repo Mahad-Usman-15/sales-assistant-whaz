@@ -59,6 +59,14 @@ export function ProposalForm() {
         body: JSON.stringify(parsed.data),
       });
 
+      // The session lapsed, or access was withdrawn mid-session. Showing a field error would be
+      // wrong — there is nothing to correct in the form — so send them to sign in and bring them
+      // back here afterwards.
+      if (response.status === 401) {
+        window.location.assign(`/login?next=${encodeURIComponent(window.location.pathname)}`);
+        return;
+      }
+
       if (!response.ok) {
         const problem = await response.json().catch(() => null);
         setErrors(

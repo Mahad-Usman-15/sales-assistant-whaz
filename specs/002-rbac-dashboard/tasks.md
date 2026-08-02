@@ -45,7 +45,7 @@ dependencies.
 - [X] T002 Change per-request work in `lib/pdf.ts` to `browser.newContext()` → `newPage()`, closing the **context** in `finally` and never the browser
 - [X] T003 Add a liveness self-heal in `lib/pdf.ts`: `if (browser && !browser.isConnected()) browser = null` before reuse, so a crashed Chromium recovers on the next request
 - [X] T004 Add a concurrency semaphore (limit 2) around context creation in `lib/pdf.ts` — Fluid Compute runs concurrent invocations on one instance and contexts are isolated but memory is not
-- [ ] T005 Verify SC-009 on a Vercel preview: 20 sequential `POST /api/generate` against the same warm instance all return 200, then 5 concurrent with no OOM, and `/tmp` does not grow monotonically
+- [X] T005 Verify SC-009 on a Vercel preview: 20 sequential `POST /api/generate` against the same warm instance all return 200, then 5 concurrent with no OOM, and `/tmp` does not grow monotonically
 - [X] T006 [P] Add runtime dependencies to `package.json`: `@supabase/supabase-js`, `@supabase/ssr`, `prisma@^7`, `@prisma/client@^7`, `@prisma/adapter-pg`, `server-only`
 - [ ] T007 [P] Add UI dependencies to `package.json`: `tailwindcss@^4`, `@tailwindcss/postcss`, `tailwind-variants`, `clsx`, `tailwind-merge`, `@remixicon/react`, `@radix-ui/react-dialog`
 - [ ] T008 [P] Add dev dependency `@axe-core/playwright` to `package.json` (SC-014)
@@ -110,22 +110,22 @@ generate nothing by any route, including calling the endpoint directly.
 
 ### Tests for User Story 1
 
-- [ ] T039 [P] [US1] Create `tests/integration/auth.setup.ts` as a Playwright `globalSetup` that signs a seeded member in and writes `storageState`, and wire `use: { storageState }` into `playwright.config.ts` — ⚠️ **every existing integration test 401s without this**
-- [ ] T040 [P] [US1] Add `tests/integration/auth-gating.spec.ts`: signed-out visitor is redirected from every page; a direct `POST /api/generate` without a session returns **401** (SC-001)
-- [ ] T041 [P] [US1] Add `tests/integration/pdf-parity.spec.ts` capturing a PDF for fixed inputs and asserting it is **byte-identical** to a pre-change fixture (SC-007, FR-013)
-- [ ] T042 [P] [US1] Add `tests/integration/deactivation.spec.ts`: a member deactivated mid-session is refused on their **very next** request, with no waiting period (SC-005, FR-006)
+- [X] T039 [P] [US1] Create `tests/integration/auth.setup.ts` as a Playwright `globalSetup` that signs a seeded member in and writes `storageState`, and wire `use: { storageState }` into `playwright.config.ts` — ⚠️ **every existing integration test 401s without this**
+- [X] T040 [P] [US1] Add `tests/integration/auth-gating.spec.ts`: signed-out visitor is redirected from every page; a direct `POST /api/generate` without a session returns **401** (SC-001)
+- [X] T041 [P] [US1] Add `tests/integration/pdf-parity.spec.ts` capturing a PDF for fixed inputs and asserting it is **byte-identical** to a pre-change fixture (SC-007, FR-013)
+- [X] T042 [P] [US1] Add `tests/integration/deactivation.spec.ts`: a member deactivated mid-session is refused on their **very next** request, with no waiting period (SC-005, FR-006)
 
 ### Implementation for User Story 1
 
-- [ ] T043 [US1] Create `proxy.ts` at repo root exporting `proxy` — ⚠️ **not** `middleware.ts`; that file does not exist in Next.js 16 and the build throws if both are present. Session refresh and redirect only, never an authorization decision (research R9)
-- [ ] T044 [US1] In `proxy.ts`, return the **same** `response` object the Supabase client wrote cookies into — constructing a fresh `NextResponse` after `getClaims()` silently drops refreshed tokens and produces "logged out on every second navigation"
-- [ ] T045 [US1] Create `app/(auth)/login/page.tsx` with an email field calling `signInWithOtp` — ⚠️ **`shouldCreateUser: true` is required by FR-043**; `false` makes the provider error on unknown addresses, turning the form into a staff enumerator (research R3)
-- [ ] T046 [US1] Ensure the `/login` response is identical for every address, with no timing branch and no "unknown address" fast path (FR-043)
-- [ ] T047 [US1] Create `app/auth/callback/route.ts` performing `exchangeCodeForSession`, an idempotent `app_user` reconcile, and `redirect('/')`; map an expired code to `/login?error=link_expired` and an INACTIVE member to `/login?error=no_access` (FR-005)
-- [ ] T048 [US1] Add `await requireUser()` to `POST /api/generate` in `app/api/generate/route.ts`, **before** `buildProposalHtml` and `renderPdf`, returning `401 { error: 'unauthenticated' }`
-- [ ] T049 [US1] Add the `503 { error: 'temporarily_unavailable', retryable: true }` branch to `app/api/generate/route.ts` — ⚠️ it MUST NOT be reported as `generation_failed`; collapsing them sends diagnosis into the Chromium pipeline when the cause is the datastore (FR-045)
-- [ ] T050 [US1] Add a 401 branch to the `!response.ok` handling in `components/ProposalForm.tsx` that redirects to `/login`; leave every other branch and all styling untouched
-- [ ] T051 [US1] Add a `signOut()` Server Action in `app/(dashboard)/dashboard/actions.ts` invoked by a `<form action>` POST, redirecting to `/login` (FR-007) — a GET link would not be CSRF-safe
+- [X] T043 [US1] Create `proxy.ts` at repo root exporting `proxy` — ⚠️ **not** `middleware.ts`; that file does not exist in Next.js 16 and the build throws if both are present. Session refresh and redirect only, never an authorization decision (research R9)
+- [X] T044 [US1] In `proxy.ts`, return the **same** `response` object the Supabase client wrote cookies into — constructing a fresh `NextResponse` after `getClaims()` silently drops refreshed tokens and produces "logged out on every second navigation"
+- [X] T045 [US1] Create `app/(auth)/login/page.tsx` with an email field calling `signInWithOtp` — ⚠️ **`shouldCreateUser: true` is required by FR-043**; `false` makes the provider error on unknown addresses, turning the form into a staff enumerator (research R3)
+- [X] T046 [US1] Ensure the `/login` response is identical for every address, with no timing branch and no "unknown address" fast path (FR-043)
+- [X] T047 [US1] Create `app/auth/callback/route.ts` performing `exchangeCodeForSession`, an idempotent `app_user` reconcile, and `redirect('/')`; map an expired code to `/login?error=link_expired` and an INACTIVE member to `/login?error=no_access` (FR-005)
+- [X] T048 [US1] Add `await requireUser()` to `POST /api/generate` in `app/api/generate/route.ts`, **before** `buildProposalHtml` and `renderPdf`, returning `401 { error: 'unauthenticated' }`
+- [X] T049 [US1] Add the `503 { error: 'temporarily_unavailable', retryable: true }` branch to `app/api/generate/route.ts` — ⚠️ it MUST NOT be reported as `generation_failed`; collapsing them sends diagnosis into the Chromium pipeline when the cause is the datastore (FR-045)
+- [X] T050 [US1] Add a 401 branch to the `!response.ok` handling in `components/ProposalForm.tsx` that redirects to `/login`; leave every other branch and all styling untouched
+- [X] T051 [US1] Add a `signOut()` Server Action in `app/(dashboard)/dashboard/actions.ts` invoked by a `<form action>` POST, redirecting to `/login` (FR-007) — a GET link would not be CSRF-safe
 - [ ] T052 [US1] Run `npm run test:integration` and confirm the pre-existing suite passes under auth, then verify `proxy` actually runs on the **first** preview deploy — ⚠️ Next patches the `proxy.js` NFT trace only under webpack, skipped under Turbopack (research R9); fall back to `next build --webpack` if it does not
 
 **Checkpoint**: US1 is fully functional and shippable with no dashboard at all.

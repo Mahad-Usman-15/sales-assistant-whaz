@@ -4,6 +4,8 @@ import { toViewModel } from '@/lib/view-model';
 import { buildProposalHtml } from '@/lib/template';
 import { buildFilename } from '@/lib/filename';
 import { renderPdf, getRenderStats } from '@/lib/pdf';
+import { requireUser } from '@/server/auth/guard';
+import { StoreUnavailableError, UnauthenticatedError, ForbiddenError } from '@/server/errors';
 
 // Chromium requires the full Node.js runtime; the Edge runtime cannot run it.
 export const runtime = 'nodejs';
@@ -18,6 +20,39 @@ function methodNotAllowed(): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // --- Authorize (FR-001) ---
+  // First, and before any parsing or rendering: an anonymous caller must not be able to spend a
+  // Chromium render, and identity must be established before the metric write that follows a
+  // successful one. `proxy.ts` does not match /api, so this is the only gate on this route.
+  try {
+    await requireUser();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError || error instanceof ForbiddenError) {
+      // Both answer 401, not 403: the client's only useful response to either is "sign in again",
+      // and distinguishing "no session" from "your access was withdrawn" would tell an
+      // unauthenticated caller whether an address is a member (FR-011).
+      return Response.json(
+        { error: 'unauthenticated', message: 'Sign in to generate proposals.' },
+        { status: 401 }
+      );
+    }
+    if (error instanceof StoreUnavailableError) {
+      // ⚠️ 503, and explicitly NOT generation_failed. Reporting an unreachable member store as a
+      // render failure sends diagnosis into the Chromium pipeline when the cause is a dependency,
+      // and destroys the only signal that would say otherwise (FR-045).
+      console.error('[generate] member store unreachable; failing closed');
+      return Response.json(
+        {
+          error: 'temporarily_unavailable',
+          message: 'Temporarily unavailable. Please try again shortly.',
+          retryable: true,
+        },
+        { status: 503 }
+      );
+    }
+    throw error;
+  }
+
   // --- Parse ---
   let payload: unknown;
   try {
