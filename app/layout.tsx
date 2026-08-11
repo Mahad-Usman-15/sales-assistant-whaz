@@ -7,8 +7,11 @@ export const metadata: Metadata = {
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
+  // `dark` drives Tailwind's dark: variants, which every pasted Tremor component uses. globals.css
+  // already declares `color-scheme: dark`, so this only tells Tailwind what the app already is —
+  // it applies no styles of its own and cannot affect the proposal form.
   return (
-    <html lang="en">
+    <html lang="en" className="dark">
       <body>{children}</body>
     </html>
   );

@@ -1,0 +1,78 @@
+/*
+ * Tailwind v4, scoped to the dashboard.
+ *
+ * ⚠️ READ BEFORE EDITING. Two lines in this file are load-bearing, and both look like omissions.
+ */
+
+@layer theme, base, components, utilities;
+
+@import 'tailwindcss/theme.css' layer(theme);
+
+/*
+ * ⚠️ `tailwindcss/preflight.css` IS DELIBERATELY NOT IMPORTED.
+ *
+ * Preflight resets bare element selectors — and app/globals.css styles bare `input` directly:
+ * 44px min-height, rgba(255,255,255,0.04) background, 20px radius, a 3px :focus-visible outline.
+ * Importing Preflight would silently flatten every one of those on the proposal form, which is
+ * brand surface where drift is a defect (constitution Principle II, FR-040).
+ *
+ * v4's decomposed imports are the reason this is possible at all: there is no config flag to
+ * disable Preflight, you simply do not import it. Do not "fix" this by adding the import.
+ */
+
+@import 'tailwindcss/utilities.css' layer(utilities) source(none);
+
+/*
+ * ⚠️ `source(none)` plus explicit @source globs. The scanner never reads app/page.tsx or
+ * components/ProposalForm.tsx, so no utility class used only by the proposal form can ever be
+ * emitted. That is a BUILD-TIME guarantee, strictly stronger than a class prefix — a prefix
+ * prevents collisions, it does not prevent generation.
+ */
+@source "./";
+@source "../../components/dashboard";
+
+/*
+ * Token bridge: Tailwind's namespaced names aliased to the existing :root variables in
+ * app/globals.css, so both surfaces resolve to byte-identical values and globals.css stays the
+ * single source of truth.
+ *
+ * ⚠️ Plain `@theme`, NEVER `@theme inline`. Non-inline emits `--color-x: var(--surface)`, keeping
+ * the live reference; `inline` substitutes at build time and severs it, so editing globals.css
+ * would silently stop affecting the dashboard.
+ */
+@theme {
+  --color-background: var(--surface);
+  --color-foreground: var(--text);
+  --color-muted: var(--text-2);
+  --color-brand: var(--text-3);
+  --color-error: var(--local-accent-3);
+  --color-success: var(--local-accent-4);
+
+  --color-surface-1: var(--raise-1);
+  --color-surface-2: var(--raise-2);
+  --color-border: var(--raise-3);
+
+  /*
+   * Tremor Raw components are written against the gray and blue ramps with dark: variants.
+   * Overriding the ramp here reskins every pasted component at once, with zero edits to their
+   * source — far less error-prone than hand-editing each file, and it survives re-copying a
+   * component from upstream.
+   */
+  --color-gray-50: var(--text);
+  --color-gray-100: #f2f2f2;
+  --color-gray-200: #cfcfcf;
+  --color-gray-300: #a8a8a8;
+  --color-gray-400: var(--text-2);
+  --color-gray-500: #6b6b6b;
+  --color-gray-600: #3d3d3d;
+  --color-gray-700: var(--local-accent-2);
+  --color-gray-800: #151515;
+  --color-gray-900: #0a0a0a;
+  --color-gray-950: var(--surface);
+
+  --radius-card: var(--radius-3);
+  --radius-control: var(--radius-2);
+
+  --font-sans: var(--font-text);
+  --font-display: var(--font-display);
+}

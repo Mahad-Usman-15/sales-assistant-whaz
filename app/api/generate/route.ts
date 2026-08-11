@@ -4,7 +4,9 @@ import { toViewModel } from '@/lib/view-model';
 import { buildProposalHtml } from '@/lib/template';
 import { buildFilename } from '@/lib/filename';
 import { renderPdf, getRenderStats } from '@/lib/pdf';
+import { after } from 'next/server';
 import { requireUser } from '@/server/auth/guard';
+import { recordGeneration } from '@/server/repo/generations';
 import { StoreUnavailableError, UnauthenticatedError, ForbiddenError } from '@/server/errors';
 
 // Chromium requires the full Node.js runtime; the Edge runtime cannot run it.
@@ -24,8 +26,9 @@ export async function POST(request: Request): Promise<Response> {
   // First, and before any parsing or rendering: an anonymous caller must not be able to spend a
   // Chromium render, and identity must be established before the metric write that follows a
   // successful one. `proxy.ts` does not match /api, so this is the only gate on this route.
+  let actor;
   try {
-    await requireUser();
+    actor = await requireUser();
   } catch (error) {
     if (error instanceof UnauthenticatedError || error instanceof ForbiddenError) {
       // Both answer 401, not 403: the client's only useful response to either is "sign in again",
@@ -113,6 +116,20 @@ export async function POST(request: Request): Promise<Response> {
     const html = buildProposalHtml(toViewModel(input));
     const pdf = await renderPdf(html, input.proposalDate);
     const filename = buildFilename(input.clientCompany, input.proposalDate);
+
+    /**
+     * FR-014 — one usage record per delivered proposal.
+     *
+     * ⚠️ Registered HERE: inside the try, and only after `renderPdf` has resolved. `after()`'s
+     * callback runs even when the response did not complete successfully, so registering it at the
+     * top of the handler and trusting the error path to skip it does NOT work — failed renders
+     * would be counted (FR-015).
+     *
+     * Deferred rather than awaited so the database stays off the response path (Principle III: the
+     * renderer touches no datastore; writes happen after it has demonstrably succeeded).
+     * recordGeneration swallows its own errors — FR-016.
+     */
+    after(() => recordGeneration(actor));
 
     return new Response(new Uint8Array(pdf), {
       status: 200,

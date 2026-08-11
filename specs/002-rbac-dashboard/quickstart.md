@@ -37,6 +37,31 @@ npm run build && npm start               # integration tests need a production b
 - **Auth → SMTP**: see below. The built-in sender is **2 emails/hour project-wide** and cannot carry
   passwordless sign-in.
 
+### Redirect URLs — where sign-in links actually land
+
+**Supabase → Authentication → URL Configuration.**
+
+`LoginForm` passes `emailRedirectTo: ${window.location.origin}/auth/callback`, which is correct and
+adapts to whatever origin the member is on. But ⚠️ **Supabase silently ignores a redirect URL that
+is not on the allow-list and substitutes the project's Site URL instead** — which defaults to
+`http://localhost:3000` on a new project. The symptom is that every emailed link points at
+localhost, including links generated from the deployed site, and nothing in the app logs anything
+wrong: the app asked for the right destination and the provider overrode it.
+
+Observed 2026-08-02 on the first real end-to-end sign-in.
+
+| Setting | Value |
+|---|---|
+| **Site URL** | The production URL — the fallback used when nothing matches |
+| **Redirect URLs** | `http://localhost:3000/**` and `https://sales-assistant-whaz-*-mahad-usmans-projects.vercel.app/**` |
+
+The wildcard is necessary because Vercel mints a new preview URL on every push.
+
+⚠️ **Keep the project prefix inside the pattern.** `https://*.vercel.app/**` would also work and
+would be dangerous: it would permit *any* Vercel-hosted app to receive your members' auth codes. The
+allow-list is a security control, not a convenience — without it, a crafted `emailRedirectTo` would
+make Supabase mail your users a link that hands their session to an attacker.
+
 ### Email delivery — the credential that is NOT in `.env`
 
 ⚠️ **No email credential appears in `.env.example`, and that is not an oversight.** This application
@@ -115,6 +140,8 @@ larger than an ESP API key's, which is the honest cost of this choice.
 arrives. On Supabase's built-in sender the 3rd sign-in of the hour silently vanishes, which presents
 as "the tool is broken" with nothing in the app's logs — the app is not in the sending path.
 - **API → Exposed schemas**: remove `public`. PostgREST is never used here.
+- **Authentication → URL Configuration**: see below. ⚠️ Missing this is not a subtle failure — every
+  sign-in link points at the wrong host.
 - ⚠️ Session time-box / inactivity timeout are **Pro-only** — not used. The 30-day window is
   enforced by the guard's `lastSeenAt` check (R2).
 

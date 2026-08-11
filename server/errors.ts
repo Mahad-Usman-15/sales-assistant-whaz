@@ -25,6 +25,15 @@ export class ForbiddenError extends Error {
   }
 }
 
+export class NotFoundError extends Error {
+  readonly code = 'not_found' as const;
+  readonly status = 404 as const;
+  constructor(message = 'Not found.') {
+    super(message);
+    this.name = 'NotFoundError';
+  }
+}
+
 /**
  * The organisation must always retain one active Admin (FR-033).
  *
@@ -61,5 +70,6 @@ export class StoreUnavailableError extends Error {
 export type AppError =
   | UnauthenticatedError
   | ForbiddenError
+  | NotFoundError
   | LastAdminError
   | StoreUnavailableError;
