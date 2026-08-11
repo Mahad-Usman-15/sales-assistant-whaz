@@ -23,3 +23,9 @@ tmp/
 *.log
 .DS_Store
 Thumbs.db
+
+# Prisma client is generated on install/build, never committed
+/generated/prisma
+
+# Playwright auth state (contains a real session)
+tests/integration/.auth/

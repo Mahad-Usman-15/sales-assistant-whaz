@@ -15,7 +15,7 @@ This approach is sanctioned by constitution **v3.0.0**, which amended Principle 
 
 **Language/Version**: TypeScript 5.x on Node.js 20 (Vercel's Node runtime; **not** the Edge runtime — Chromium needs full Node)
 **Primary Dependencies**: Next.js 15 (App Router), React 19, `playwright-core`, `@sparticuz/chromium`, `zod`. Dev-only: `playwright` (full package, for a local Chromium), `vitest`, `@playwright/test`
-**Storage**: N/A — stateless per request; nothing is persisted (Constitution III)
+**Storage**: N/A — stateless per request; nothing is persisted (Constitution III). *Note (2026-08-01, constitution v4.0.0): Principle III was redefined from "stateless-by-default" to "additive extension." This feature is unaffected — the render path still touches no datastore. Feature 002 adds identity around it, not inside it.*
 **Testing**: Vitest for unit (escaping, schema, catalog, HTML assembly); `@playwright/test` for integration (form → download → PDF byte/structure assertions)
 **Target Platform**: Vercel serverless (Hobby/Free tier), Node.js runtime, `maxDuration` raised for cold starts
 **Project Type**: Web application (single Next.js app — frontend + API route colocated)
@@ -27,7 +27,7 @@ This approach is sanctioned by constitution **v3.0.0**, which amended Principle 
 
 *GATE: Must pass before Phase 0 research. Re-check after Phase 1 design.*
 
-**Initial evaluation (pre-Phase 0): PASS** — re-verified post-Phase 1 design: **PASS** against constitution **v3.0.0**.
+**Initial evaluation (pre-Phase 0): PASS** — re-verified post-Phase 1 design: **PASS** against constitution **v3.0.0**, and re-checked **PASS** against **v4.0.0** (2026-08-01). Principle II is unchanged in v4.0.0. Principle III was redefined ("stateless-by-default" → "additive extension"); this feature satisfies the redefined form as written — see the row below. Principle VI (server-enforced authorization) is new and has no privileged operations in this feature to bind, but it governs the change that adds `requireUser()` to `POST /api/generate`.
 
 *History: Principle II has been amended twice, each time because a premise was falsified rather than because the plan wanted an exception. v1.0.0 forbade CSS-built chrome; amended to v2.0.0 on 2026-07-19 once it was established no vector source exists. v2.0.0 forbade bundling rasters; amended to v3.0.0 on 2026-07-26 after the salesperson rejected the CSS-built output and the approved artwork proved extractable from the reference PDF. No exception was ever granted and none is outstanding.*
 
@@ -35,7 +35,7 @@ This approach is sanctioned by constitution **v3.0.0**, which amended Principle 
 |---|---|---|
 | **I. Deterministic Rendering — Zero AI in Render Path** | ✅ PASS | No model is invoked anywhere. Every PDF byte derives from rep input, the hardcoded catalog, or the fixed template. Same input → identical output (FR-007); no randomness, no timestamps beyond the rep-supplied date. CSS-built chrome strengthens this — it removes the last non-reproducible artifact from the pipeline. |
 | **II. Brand Fidelity Is Ground Truth** | ✅ PASS | Under **v3.0.0** the chrome is the approved artwork extracted losslessly from `docs/reference-letter-head.pdf` and bundled as `assets/brand/letterhead.png`, painted full-bleed on every page — exactly what this plan does. Binding consequences satisfied: the single permitted raster is bundled and `docs/` stays reference-only; the artwork is neither upscaled nor regenerated; body text remains real selectable text; the watermark now *ships* as part of the composite rather than being deferred or hand-drawn; and fidelity is verified numerically (≤0.5mm baseline tolerance, currently ≤0.11mm) per `quickstart.md`. |
-| **III. Stateless-by-Default** | ✅ PASS | No DB, no auth, no session, no file writes. Request in → PDF out. Future history/AI-drafting can layer additively around `POST /api/generate` without touching it. |
+| **III. Additive Extension** *(named "Stateless-by-Default" through v3.0.0)* | ✅ PASS | Request in → PDF out, with no DB, session, or file writes inside the render. Under v4.0.0's wording this is exactly the required shape: `lib/` is framework-free and unit-testable with no database; identity, roles, and usage metrics layer around `POST /api/generate` as a precondition before the render and a side effect after it, without touching the transformation itself. |
 | **IV. Small, Spec-Driven Increments** | ✅ PASS | Work is scoped to this spec's FR-001…FR-016 only. User stories P1/P2/P3 map to independently shippable slices; no speculative abstractions (no template engine, no plugin layer, no catalog CMS). |
 | **V. Cost Ceiling** | ✅ PASS | Vercel Hobby ($0) at 10–50/day. No database, no third-party API, no paid service. `@sparticuz/chromium` chosen specifically to stay inside Hobby's bundle limit. |
 

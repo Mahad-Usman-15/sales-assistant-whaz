@@ -37,6 +37,12 @@
   ],
   "exclude": [
     "node_modules",
-    "tests/integration"
+    "tests/integration",
+    // Operator tooling, never imported by the app. `next build` type-checks everything in
+    // `include`, so leaving these here let a standalone script fail a production deploy — which
+    // is what happened on 2026-08-02, when scripts/bootstrap-admin.ts could not resolve the
+    // generated Prisma client and took the whole Vercel build down with it.
+    // Still type-checked, just separately: `npm run typecheck:scripts`.
+    "scripts"
   ]
 }

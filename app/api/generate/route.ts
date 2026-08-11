@@ -3,7 +3,11 @@ import { CATALOG_IDS } from '@/lib/catalog';
 import { toViewModel } from '@/lib/view-model';
 import { buildProposalHtml } from '@/lib/template';
 import { buildFilename } from '@/lib/filename';
-import { renderPdf } from '@/lib/pdf';
+import { renderPdf, getRenderStats } from '@/lib/pdf';
+import { after } from 'next/server';
+import { requireUser } from '@/server/auth/guard';
+import { recordGeneration } from '@/server/repo/generations';
+import { StoreUnavailableError, UnauthenticatedError, ForbiddenError } from '@/server/errors';
 
 // Chromium requires the full Node.js runtime; the Edge runtime cannot run it.
 export const runtime = 'nodejs';
@@ -18,6 +22,40 @@ function methodNotAllowed(): Response {
 }
 
 export async function POST(request: Request): Promise<Response> {
+  // --- Authorize (FR-001) ---
+  // First, and before any parsing or rendering: an anonymous caller must not be able to spend a
+  // Chromium render, and identity must be established before the metric write that follows a
+  // successful one. `proxy.ts` does not match /api, so this is the only gate on this route.
+  let actor;
+  try {
+    actor = await requireUser();
+  } catch (error) {
+    if (error instanceof UnauthenticatedError || error instanceof ForbiddenError) {
+      // Both answer 401, not 403: the client's only useful response to either is "sign in again",
+      // and distinguishing "no session" from "your access was withdrawn" would tell an
+      // unauthenticated caller whether an address is a member (FR-011).
+      return Response.json(
+        { error: 'unauthenticated', message: 'Sign in to generate proposals.' },
+        { status: 401 }
+      );
+    }
+    if (error instanceof StoreUnavailableError) {
+      // ⚠️ 503, and explicitly NOT generation_failed. Reporting an unreachable member store as a
+      // render failure sends diagnosis into the Chromium pipeline when the cause is a dependency,
+      // and destroys the only signal that would say otherwise (FR-045).
+      console.error('[generate] member store unreachable; failing closed');
+      return Response.json(
+        {
+          error: 'temporarily_unavailable',
+          message: 'Temporarily unavailable. Please try again shortly.',
+          retryable: true,
+        },
+        { status: 503 }
+      );
+    }
+    throw error;
+  }
+
   // --- Parse ---
   let payload: unknown;
   try {
@@ -79,6 +117,20 @@ export async function POST(request: Request): Promise<Response> {
     const pdf = await renderPdf(html, input.proposalDate);
     const filename = buildFilename(input.clientCompany, input.proposalDate);
 
+    /**
+     * FR-014 — one usage record per delivered proposal.
+     *
+     * ⚠️ Registered HERE: inside the try, and only after `renderPdf` has resolved. `after()`'s
+     * callback runs even when the response did not complete successfully, so registering it at the
+     * top of the handler and trusting the error path to skip it does NOT work — failed renders
+     * would be counted (FR-015).
+     *
+     * Deferred rather than awaited so the database stays off the response path (Principle III: the
+     * renderer touches no datastore; writes happen after it has demonstrably succeeded).
+     * recordGeneration swallows its own errors — FR-016.
+     */
+    after(() => recordGeneration(actor));
+
     return new Response(new Uint8Array(pdf), {
       status: 200,
       headers: {
@@ -86,20 +138,39 @@ export async function POST(request: Request): Promise<Response> {
         'Content-Disposition': `attachment; filename="${filename}"`,
         'Content-Length': String(pdf.byteLength),
         'Cache-Control': 'no-store',
+        ...renderStatsHeaders(),
       },
     });
   } catch (error) {
     // Log server-side for debugging; the rep sees a plain retryable message, never a stack trace.
-    console.error('[generate] PDF render failed:', error);
+    // The instance id is logged too, so a log line can be tied to the request that produced it.
+    console.error(`[generate] PDF render failed on instance ${getRenderStats().instanceId}:`, error);
     return Response.json(
       {
         error: 'generation_failed',
         message: "We couldn't generate the proposal. Please try again.",
         retryable: true,
       },
-      { status: 500 }
+      { status: 500, headers: renderStatsHeaders() }
     );
   }
+}
+
+/**
+ * Diagnostic headers identifying which process served the request and how much work it had already
+ * done. Present on BOTH the success and failure paths — the failure path is where they matter,
+ * since "this instance had already rendered N times" is exactly what distinguishes resource
+ * exhaustion from a cold-start problem, and that is unknowable from outside otherwise.
+ *
+ * Carries no user or proposal data, and does not affect the PDF bytes (FR-013).
+ */
+function renderStatsHeaders(): Record<string, string> {
+  const stats = getRenderStats();
+  return {
+    'x-render-instance': stats.instanceId,
+    'x-render-count': String(stats.rendersServed),
+    'x-browser-launches': String(stats.browserLaunches),
+  };
 }
 
 export const GET = methodNotAllowed;

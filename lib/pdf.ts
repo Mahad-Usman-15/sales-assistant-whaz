@@ -1,11 +1,15 @@
-import { chromium as playwrightChromium, type Browser } from 'playwright-core';
+import { chromium as playwrightChromium, type Browser, type Page } from 'playwright-core';
 
 /**
- * HTML -> PDF rendering via headless Chromium (research.md R3).
+ * HTML -> PDF rendering via headless  Chromium (research.md R3).
  *
  * @sparticuz/chromium is a Linux/Lambda build and will not launch on a Windows or macOS dev
  * machine, so the executable is resolved per environment. This is the only intentional
  * dev/prod divergence in the codebase.
+ *
+ * ⚠️ The browser is launched ONCE per instance and reused. Do not "restore" a per-request
+ * launch/close — it was the cause of a production defect where every 8th sequential render
+ * failed and stayed failed. See the block comment on getBrowser().
  */
 
 const isServerless = Boolean(process.env.VERCEL);
@@ -23,6 +27,144 @@ async function launchBrowser(): Promise<Browser> {
   // Local development: use the Chromium installed by the dev-only `playwright` package.
   const { chromium: devChromium } = await import('playwright');
   return devChromium.launch({ headless: true });
+}
+
+/**
+ * Renders are serialised per instance — ONE at a time.
+ *
+ * Not a memory tuning: the instance keeps a single long-lived page (see getPage), and one page
+ * cannot serve two renders at once without them clobbering each other's document. Concurrency
+ * comes from Vercel running more instances, not from more pages per instance, which is the right
+ * axis anyway — each instance holds its own Chromium.
+ *
+ * At ~700ms per warm render and 10–50 proposals/day, queueing costs nothing observable.
+ */
+const MAX_CONCURRENT_RENDERS = 1;
+
+let browserPromise: Promise<Browser> | null = null;
+let pagePromise: Promise<Page> | null = null;
+let activeRenders = 0;
+const slotQueue: Array<() => void> = [];
+
+/**
+ * Per-process identity and counters, exposed as response headers by the generate route.
+ *
+ * SC-009 asserts "N sequential renders on the SAME WARM INSTANCE", and that is not observable from
+ * outside without this: `x-vercel-id`'s trailing segment is a per-REQUEST id, so counting distinct
+ * values measures nothing. A run spread across N cold instances — each with an empty /tmp — would
+ * otherwise be indistinguishable from a genuine sustained-use run, and would pass for the wrong
+ * reason. `browserLaunches` is the sharper signal: on a healthy instance it stays at 1 forever,
+ * and any growth means the browser is dying and being relaunched.
+ *
+ * Module scope, so these reset exactly when the process does.
+ */
+const INSTANCE_ID = Math.random().toString(36).slice(2, 10);
+let rendersServed = 0;
+let browserLaunches = 0;
+
+export function getRenderStats(): {
+  instanceId: string;
+  rendersServed: number;
+  browserLaunches: number;
+} {
+  return { instanceId: INSTANCE_ID, rendersServed, browserLaunches };
+}
+
+async function acquireRenderSlot(): Promise<void> {
+  if (activeRenders < MAX_CONCURRENT_RENDERS) {
+    activeRenders += 1;
+    return;
+  }
+  // Wait for a slot. The releaser hands its slot over directly rather than decrementing,
+  // so the count can never transiently exceed the cap.
+  await new Promise<void>((resolve) => slotQueue.push(resolve));
+}
+
+function releaseRenderSlot(): void {
+  const next = slotQueue.shift();
+  if (next) {
+    next();
+  } else {
+    activeRenders -= 1;
+  }
+}
+
+/**
+ * Returns the instance-wide Chromium, launching it once and reusing it thereafter.
+ *
+ * ⚠️ This function is why sustained rendering works. The original implementation launched a
+ * browser per request and closed it in a `finally`, which correctly freed *memory* and misled
+ * everyone — the leak was *disk*. @sparticuz/chromium inflates ~200 MB into /tmp on first
+ * launch (512 MB cap), and every additional launch left ~40 MB of profile, disk cache
+ * (`--disk-cache-size=33554432`), code cache and crashpad data behind. ~310 MB remaining over
+ * ~40 MB per launch is ~7 renders, which is exactly where production failed — and it stayed
+ * failed, because a full disk does not heal until the instance is recycled.
+ *
+ * A page is just a tab in the running browser process and creates no profile directory, so
+ * per-request work now costs no disk at all. (⚠️ A BrowserContext would ALSO cost no disk, and is
+ * still wrong here — see the comment in renderPdf: under --single-process, closing one kills the
+ * browser and forces a relaunch, which is exactly the leak this function exists to prevent.)
+ *
+ * ⚠️ Do NOT add a "recycle the browser every N renders" safety valve. It was tried and removed:
+ * each relaunch re-incurs the ~40 MB /tmp cost, reintroducing the original defect at 1/N the
+ * rate. The tradeoff is asymmetric — running out of memory kills the instance, which restarts
+ * with a clean /tmp and self-heals; running out of disk does not self-heal, as production
+ * demonstrated with 10 consecutive failures. The browser is only ever replaced when it has
+ * actually died (isConnected() below).
+ */
+async function getBrowser(): Promise<Browser> {
+  const pending = browserPromise;
+
+  if (pending) {
+    const existing = await pending.catch(() => null);
+    if (existing?.isConnected()) return existing;
+
+    // Chromium died (crash, OOM kill of the child). Drop it and relaunch — this is a genuine
+    // recovery path, not a scheduled recycle.
+    browserPromise = null;
+    if (existing) await existing.close().catch(() => undefined);
+  }
+
+  browserLaunches += 1;
+  browserPromise = launchBrowser();
+  pagePromise = null; // a new browser invalidates any page from the previous one
+  return browserPromise;
+}
+
+/**
+ * Returns the instance's single long-lived page, creating it only if there isn't a usable one.
+ *
+ * ⚠️ THE PAGE IS NEVER CLOSED, AND THAT IS THE POINT. @sparticuz/chromium launches with
+ * `--no-startup-window` (visible in the launch args in Vercel's logs), so the browser starts with
+ * zero windows. The page created here is the ONLY window — closing it drops the count to zero and
+ * Chromium exits.
+ *
+ * This was learned twice, expensively. First attempt: a BrowserContext per request, closed in a
+ * `finally`. Second: a Page per request, closed in a `finally`. Both killed the browser after every
+ * render, so `getBrowser()` relaunched it on the next one, and every relaunch left another
+ * ~40 MB /tmp profile directory behind — reproducing the original disk-exhaustion defect that the
+ * browser reuse existed to fix. Measured on Vercel 2026-08-02: one instance served 20 sequential
+ * requests and relaunched Chromium 17 times, with 3 successes.
+ *
+ * `setContent()` replaces the whole document, so reuse needs no cleanup. Determinism across a
+ * reused page is asserted by tests/scale/render-scale.test.ts, which requires 100 consecutive
+ * renders to be byte-identical AND `browserLaunches` to stay at 1.
+ */
+async function getPage(): Promise<Page> {
+  const browser = await getBrowser();
+
+  if (pagePromise) {
+    const existing = await pagePromise.catch(() => null);
+    // `context().browser()` guards the case where the browser was replaced underneath us: a page
+    // belonging to a dead browser can still report !isClosed().
+    if (existing && !existing.isClosed() && existing.context().browser() === browser) {
+      return existing;
+    }
+    pagePromise = null;
+  }
+
+  pagePromise = browser.newPage();
+  return pagePromise;
 }
 
 /**
@@ -60,11 +202,11 @@ function pinTimestamps(pdf: Buffer, proposalDate: string): Buffer {
  * byte-identical output.
  */
 export async function renderPdf(html: string, proposalDate?: string): Promise<Buffer> {
-  let browser: Browser | null = null;
+  await acquireRenderSlot();
 
   try {
-    browser = await launchBrowser();
-    const page = await browser.newPage();
+    const page = await getPage();
+    rendersServed += 1;
 
     // 'load' is sufficient and cheaper than networkidle: the document makes no network
     // requests at all by design (constitution: Security Requirements).
@@ -79,8 +221,10 @@ export async function renderPdf(html: string, proposalDate?: string): Promise<Bu
 
     return proposalDate ? pinTimestamps(pdf, proposalDate) : pdf;
   } finally {
-    // Always dispose: a leaked browser in a warm serverless container exhausts memory
-    // across subsequent invocations.
-    await browser?.close();
+    // ⚠️ Nothing is closed here — not the browser, not a context, not the page. Each of those was
+    // tried and each killed Chromium under @sparticuz/chromium's launch flags, forcing a relaunch
+    // that leaked ~40 MB of /tmp. See getPage(). The browser and its single page are
+    // instance-scoped and outlive every request; they are replaced only when they actually die.
+    releaseRenderSlot();
   }
 }
